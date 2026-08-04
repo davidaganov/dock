@@ -14,7 +14,7 @@
 
 Local multi-project hub for developers. Run npm scripts, git commands, and a built-in terminal — with categories, filters, and a Windows system tray. No accounts, no cloud, zero runtime npm dependencies for the server itself.
 
-**A project is any folder on disk.** Git and `package.json` are optional.
+**A project is any folder on disk.**
 
 Built with plain Node.js + a small optional .NET tray on Windows.
 
@@ -86,12 +86,10 @@ Categories in Dock map to Project Manager groups (e.g. `01. Work`, `02. Personal
 - **Integrated terminal** with session tabs and real-time SSE logs
 - **Create** empty folders or **clone** repos into a category
 - **Windows system tray** for background server + quick open
-- **English / Russian** UI (tray follows the same locale)
-- **Hidden projects** via the `__hidden__` tag
 
 ## Configuration
 
-Local file `dock-config.json` (gitignored) stores paths, onboarding flag, and UI preferences.
+Local file `dock-config.json` stores paths, onboarding flag, and UI preferences.
 
 Example: [`dock-config.example.json`](dock-config.example.json)
 
@@ -148,8 +146,6 @@ npm run format:check    # prettier
 npm run translate       # polyglot-keeper
 npm run tray:build
 ```
-
-Copy [`.env.example`](.env.example) to `.env` for locale sync. Config: [`polyglot.config.json`](polyglot.config.json) (`en` is the source locale, files in `public/locales`).
 
 ## License
 
