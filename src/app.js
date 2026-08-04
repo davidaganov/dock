@@ -6,7 +6,7 @@ const { loadConfig, isConfigured } = require("./config/config")
 const { loadProjects } = require("./projects/projects")
 const { initProcessManager, killAllOnShutdown } = require("./runtime/processes")
 const { broadcast, addSseClient, removeSseClient } = require("./runtime/sse")
-const { serveStatic, scheduleServerRestart } = require("./system/static")
+const { serveStatic } = require("./system/static")
 const { handleOnboardingApi } = require("./routes/onboarding")
 const { handleSettingsApi } = require("./routes/settings")
 const { handleReposApi, handleSessionsApi, log } = require("./routes/api")
@@ -43,13 +43,7 @@ const createApp = () => {
           return
         }
 
-        if (
-          await handleReposApi(req, res, pathname, {
-            scheduleRestart: () => scheduleServerRestart(server)
-          })
-        ) {
-          return
-        }
+        if (await handleReposApi(req, res, pathname)) return
 
         sendJson(res, 404, { error: "Not found" })
       } catch (err) {

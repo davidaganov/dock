@@ -48,6 +48,33 @@ const inferCategoryDir = (tag, projects, homePath) => {
   return null
 }
 
+const defaultCategoryDir = (tag, homePath) => {
+  if (!tag || tag === UNCATEGORIZED_KEY || !homePath) return null
+  const label = parseTagLabel(tag).label
+  if (!label) return null
+  return path.resolve(path.join(homePath, label))
+}
+
+const resolveCategoryDir = (tag, projects, homePath, { mkdir = false } = {}) => {
+  if (!homePath) return null
+  const resolvedHome = path.resolve(homePath)
+  if (!fs.existsSync(resolvedHome) || !fs.statSync(resolvedHome).isDirectory()) return null
+
+  if (!tag || tag === UNCATEGORIZED_KEY) return resolvedHome
+
+  const existing = inferCategoryDir(tag, projects, resolvedHome)
+  if (existing) return existing
+
+  const candidate = defaultCategoryDir(tag, resolvedHome)
+  if (!candidate) return null
+  if (mkdir) {
+    fs.mkdirSync(candidate, { recursive: true })
+    return candidate
+  }
+  if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) return candidate
+  return candidate
+}
+
 const rememberCategoryDir = (prefs, tag, dir) => {
   if (!tag || tag === UNCATEGORIZED_KEY || !dir) return
   if (!prefs.categoryDirs || typeof prefs.categoryDirs !== "object") {
@@ -56,4 +83,4 @@ const rememberCategoryDir = (prefs, tag, dir) => {
   prefs.categoryDirs[tag] = path.resolve(dir)
 }
 
-module.exports = { inferCategoryDir, rememberCategoryDir }
+module.exports = { inferCategoryDir, defaultCategoryDir, resolveCategoryDir, rememberCategoryDir }

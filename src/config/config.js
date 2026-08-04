@@ -70,6 +70,12 @@ const getProjectsJsonPath = () => {
   return loadConfig().projectsJsonPath
 }
 
+const resetDockConfig = () => {
+  const cfg = defaultConfig()
+  writeDockFile(cfg)
+  return cfg
+}
+
 module.exports = {
   loadConfig,
   saveConfig,
@@ -78,5 +84,6 @@ module.exports = {
   defaultConfig,
   readDockFile,
   writeDockFile,
+  resetDockConfig,
   CONFIG_KEYS
 }

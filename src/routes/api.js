@@ -9,8 +9,7 @@ const {
   updateProjectById,
   removeProjectById,
   validateLocalProjectDir,
-  projectPath,
-  HIDDEN_TAG
+  projectPath
 } = require("../projects/projects")
 const {
   listSidebarTags,
@@ -62,7 +61,8 @@ const { broadcast } = require("../runtime/sse")
 const path = require("path")
 const fs = require("fs")
 const { resolveExistingDir, defaultHomePath } = require("../core/paths")
-const { inferCategoryDir, rememberCategoryDir } = require("../projects/category-dirs")
+const { resolveCategoryDir, rememberCategoryDir } = require("../projects/category-dirs")
+const { stopProjectsWatch, startProjectsWatch } = require("../projects/projects-watch")
 
 const log = (repo, message, type = "info", sessionId = null, i18nKey = null, i18nParams = null) => {
   const entry = {
@@ -85,7 +85,7 @@ const log = (repo, message, type = "info", sessionId = null, i18nKey = null, i18
   broadcast("log", entry)
 }
 
-const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
+const handleReposApi = async (req, res, pathname) => {
   if (req.method === "GET" && pathname === "/api/repos") {
     const projects = discoverProjects()
     const enabledProjects = projects.filter((p) => p.enabled)
@@ -385,14 +385,18 @@ const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
   if (req.method === "GET" && pathname === "/api/category-dir") {
     const url = new URL(req.url, "http://127.0.0.1")
     const tag = url.searchParams.get("tag") || ""
-    if (!tag || isUncategorizedKey(tag)) {
+    if (!tag) {
       return sendJson(res, 400, { error: "tag required" })
     }
     const cfg = loadConfig()
     const projects = loadProjects()
-    const dir = inferCategoryDir(tag, projects, cfg.homePath)
+    const dir = resolveCategoryDir(tag, projects, cfg.homePath)
     if (!dir) return sendJson(res, 404, { error: "categoryDirNotFound" })
-    return sendJson(res, 200, { tag, dir })
+    return sendJson(res, 200, {
+      tag,
+      dir,
+      exists: fs.existsSync(dir) && fs.statSync(dir).isDirectory()
+    })
   }
 
   if (req.method === "POST" && pathname === "/api/repos/create") {
@@ -408,9 +412,6 @@ const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
       const name = typeof body.name === "string" ? body.name.trim() : ""
       const repoUrl = typeof body.repoUrl === "string" ? body.repoUrl.trim() : ""
 
-      if (!tag || isUncategorizedKey(tag)) {
-        return sendJson(res, 400, { error: "category required" })
-      }
       if (!name) return sendJson(res, 400, { error: "name required" })
       if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
         return sendJson(res, 400, { error: "invalid name" })
@@ -418,11 +419,21 @@ const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
 
       const cfg = loadConfig()
       const projects = loadProjects()
-      const categoryDir = inferCategoryDir(tag, projects, cfg.homePath)
-      if (!categoryDir) return sendJson(res, 404, { error: "categoryDirNotFound" })
+      const uncategorized = !tag || isUncategorizedKey(tag)
+      const categoryDir = resolveCategoryDir(
+        uncategorized ? UNCATEGORIZED_KEY : tag,
+        projects,
+        cfg.homePath,
+        { mkdir: !uncategorized }
+      )
+      if (!categoryDir) {
+        return sendJson(res, 404, {
+          error: uncategorized ? "homePathNotFound" : "categoryDirNotFound"
+        })
+      }
 
       const prefs = loadPreferences()
-      rememberCategoryDir(prefs, tag, categoryDir)
+      if (!uncategorized) rememberCategoryDir(prefs, tag, categoryDir)
       savePreferences(prefs)
 
       const targetPath = path.join(categoryDir, name)
@@ -439,7 +450,11 @@ const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
         return sendJson(res, 400, { error: "method required" })
       }
 
-      const project = addProjectEntry({ name, rootPath: targetPath, tags: [tag] })
+      const project = addProjectEntry({
+        name,
+        rootPath: targetPath,
+        tags: uncategorized ? [] : [tag]
+      })
       log("", "", "success", null, "log.projectAdded", {
         name: project.name,
         path: project.rootPath
@@ -567,10 +582,10 @@ const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
 
   if (req.method === "POST" && pathname === "/api/restart") {
     const stopped = stopAllSessions()
-    log("", `Restarting Dock (stopped ${stopped} sessions)…`, "warning")
-    sendJson(res, 200, { ok: true, stopped, restarting: true })
-    setTimeout(() => scheduleRestart(), 300)
-    return true
+    stopProjectsWatch()
+    startProjectsWatch()
+    log("", `Dock restarted (stopped ${stopped} sessions)`, "warning")
+    return sendJson(res, 200, { ok: true, stopped, reload: true })
   }
 
   if (req.method === "POST" && pathname === "/api/ports/kill") {
@@ -648,32 +663,13 @@ const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
       }
       if (typeof body.tag === "string") {
         const trimmed = body.tag.trim()
-        if (!trimmed || trimmed === UNCATEGORIZED_KEY) {
-          const current = getProjectById(projectId)
-          const hidden = current?.tags?.includes(HIDDEN_TAG)
-          patch.tags = hidden ? [HIDDEN_TAG] : []
-        } else {
-          patch.tags = [trimmed]
-          const current = getProjectById(projectId)
-          if (current?.tags?.includes(HIDDEN_TAG)) {
-            patch.tags.push(HIDDEN_TAG)
-            patch.enabled = false
-          }
-        }
+        patch.tags = !trimmed || trimmed === UNCATEGORIZED_KEY ? [] : [trimmed]
       }
-      if (Array.isArray(body.tags)) patch.tags = body.tags.filter((t) => typeof t === "string")
+      if (Array.isArray(body.tags)) {
+        patch.tags = body.tags.filter((t) => typeof t === "string")
+      }
       if (typeof body.enabled === "boolean") {
         patch.enabled = body.enabled
-        if (!body.enabled && !patch.tags) {
-          const current = getProjectById(projectId)
-          const tags = new Set(current?.tags || [])
-          tags.add(HIDDEN_TAG)
-          patch.tags = [...tags]
-        }
-        if (body.enabled && !patch.tags) {
-          const current = getProjectById(projectId)
-          patch.tags = (current?.tags || []).filter((t) => t !== HIDDEN_TAG)
-        }
       }
       const updated = updateProjectById(projectId, patch)
       broadcast("repo-update", { name: projectId })
@@ -806,19 +802,13 @@ const handleReposApi = async (req, res, pathname, { scheduleRestart }) => {
       }
 
       if (sub === "/hide") {
-        const updated = updateProjectById(projectId, {
-          enabled: false,
-          tags: [...new Set([...(project.tags || []), HIDDEN_TAG])]
-        })
+        const updated = updateProjectById(projectId, { enabled: false })
         broadcast("repo-update", { name: projectId })
         return sendJson(res, 200, { project: updated })
       }
 
       if (sub === "/show") {
-        const updated = updateProjectById(projectId, {
-          enabled: true,
-          tags: (project.tags || []).filter((t) => t !== HIDDEN_TAG)
-        })
+        const updated = updateProjectById(projectId, { enabled: true })
         broadcast("repo-update", { name: projectId })
         return sendJson(res, 200, { project: updated })
       }

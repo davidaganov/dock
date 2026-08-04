@@ -2,7 +2,6 @@ const path = require("path")
 
 const PORT = 3848
 const HOST = "127.0.0.1"
-const HIDDEN_TAG = "__hidden__"
 const UNCATEGORIZED_TAG = ""
 const UNCATEGORIZED_KEY = "__uncategorized__"
 
@@ -35,7 +34,6 @@ const MIME = {
 module.exports = {
   PORT,
   HOST,
-  HIDDEN_TAG,
   UNCATEGORIZED_TAG,
   UNCATEGORIZED_KEY,
   ROOT_DIR,

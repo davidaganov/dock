@@ -3,8 +3,7 @@ const {
   saveProjectsJson,
   parseTagLabel,
   formatOrderedTag,
-  primaryTag,
-  HIDDEN_TAG
+  primaryTag
 } = require("./projects")
 const { UNCATEGORIZED_TAG, UNCATEGORIZED_KEY } = require("../core/constants")
 
@@ -60,37 +59,54 @@ const defaultSortTags = (tags) => {
 }
 
 const listSidebarTags = (projects, tagOrder = null) => {
-  const tags = effectiveSidebarTagKeys(projects)
-  if (tagOrder?.length) return applyTagOrder(tags, tagOrder)
-  return defaultSortTags(tags)
+  const fromProjects = collectSidebarTagKeys(projects)
+  const hasUncat = hasUncategorizedProjects(projects)
+
+  if (!tagOrder?.length) {
+    const tags = [...fromProjects]
+    if (hasUncat) tags.push(UNCATEGORIZED_KEY)
+    return defaultSortTags(tags)
+  }
+
+  const ordered = []
+  const seen = new Set()
+
+  for (const tag of tagOrder) {
+    if (isUncategorizedKey(tag)) {
+      if (hasUncat) {
+        ordered.push(UNCATEGORIZED_KEY)
+        seen.add(UNCATEGORIZED_KEY)
+      }
+      continue
+    }
+    ordered.push(tag)
+    seen.add(tag)
+  }
+
+  for (const tag of fromProjects) {
+    if (!seen.has(tag)) {
+      ordered.push(tag)
+      seen.add(tag)
+    }
+  }
+
+  if (hasUncat && !seen.has(UNCATEGORIZED_KEY)) {
+    ordered.push(UNCATEGORIZED_KEY)
+  }
+
+  return ordered
 }
 
 const syncTagOrder = (prefs, projects) => {
-  const current = effectiveSidebarTagKeys(projects)
-  if (!current.length) {
-    if (!prefs.tagOrder?.length) return false
-    prefs.tagOrder = []
+  const merged = listSidebarTags(projects, prefs.tagOrder)
+
+  if (!prefs.tagOrder?.length && merged.length) {
+    prefs.tagOrder = merged
     return true
   }
 
-  const realTags = current.filter((t) => !isUncategorizedKey(t))
-  const hasPrefixes = realTags.some((t) => !!parseTagLabel(t).prefix)
-  const next = hasPrefixes
-    ? defaultSortTags(current)
-    : (() => {
-        if (!Array.isArray(prefs.tagOrder) || !prefs.tagOrder.length) {
-          return defaultSortTags(current)
-        }
-        const set = new Set(current)
-        const ordered = prefs.tagOrder.filter((t) => set.has(t))
-        for (const tag of defaultSortTags(current)) {
-          if (!ordered.includes(tag)) ordered.push(tag)
-        }
-        return ordered
-      })()
-
-  const changed = JSON.stringify(prefs.tagOrder || []) !== JSON.stringify(next)
-  prefs.tagOrder = next
+  const changed = JSON.stringify(prefs.tagOrder || []) !== JSON.stringify(merged)
+  if (changed) prefs.tagOrder = merged
   return changed
 }
 
@@ -174,7 +190,7 @@ const reorderTagsInJson = (orderedTags) => {
   const labelToOldTag = new Map()
   for (const project of projects) {
     for (const tag of project.tags) {
-      if (!tag || tag === HIDDEN_TAG) continue
+      if (!tag) continue
       const { label } = parseTagLabel(tag)
       if (!labelToOldTag.has(label)) labelToOldTag.set(label, tag)
     }
@@ -192,7 +208,7 @@ const reorderTagsInJson = (orderedTags) => {
 
   for (const project of projects) {
     project.tags = project.tags.map((tag) => {
-      if (!tag || tag === HIDDEN_TAG) return tag
+      if (!tag) return tag
       if (mapping.has(tag)) return mapping.get(tag)
       const { label } = parseTagLabel(tag)
       if (mapping.has(label)) return mapping.get(label)
@@ -208,7 +224,7 @@ const stripNumbersInProjectsJson = () => {
   const projects = loadProjects()
   for (const project of projects) {
     project.tags = project.tags.map((tag) => {
-      if (!tag || tag === HIDDEN_TAG) return tag
+      if (!tag) return tag
       return parseTagLabel(tag).label
     })
   }
@@ -227,7 +243,7 @@ const applyNumbersToProjectsJson = (tagOrder) => {
 
   for (const project of projects) {
     project.tags = project.tags.map((tag) => {
-      if (!tag || tag === HIDDEN_TAG) return tag
+      if (!tag) return tag
       const { label } = parseTagLabel(tag)
       return labelToNumbered.get(label) || tag
     })
@@ -278,8 +294,7 @@ const deleteTagFromProjects = (tag) => {
   let count = 0
   for (const project of projects) {
     if (primaryTag(project) !== tag) continue
-    const hidden = project.tags.includes(HIDDEN_TAG)
-    project.tags = hidden ? [HIDDEN_TAG] : []
+    project.tags = []
     count += 1
   }
   saveProjectsJson(projects)

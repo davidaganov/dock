@@ -1685,6 +1685,25 @@ body {
   overflow: auto;
 }
 
+.busy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.busy-overlay-card {
+  padding: 20px 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
 .settings-panel {
   width: min(520px, 100%);
   background: var(--surface);
@@ -2158,13 +2177,15 @@ body {
   background: rgba(255, 80, 80, 0.1);
 }
 
-.categories-add-row {
+.categories-add-row,
+.create-category-add-row {
   display: flex;
   gap: 6px;
   margin-bottom: 4px;
 }
 
-.categories-add-row input {
+.categories-add-row input,
+.create-category-add-row input {
   flex: 1;
   min-width: 0;
   background: var(--surface-2);

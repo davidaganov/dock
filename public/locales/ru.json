@@ -101,7 +101,13 @@
     "saving": "Сохранение…",
     "saved": "Сохранено",
     "pickProjectsJson": "Выберите projects.json",
-    "filePickerWindowsOnly": "Выбор файла доступен только на Windows"
+    "filePickerWindowsOnly": "Выбор файла доступен только на Windows",
+    "resetTitle": "Сброс",
+    "resetHint": "Очищает настройки Dock и возвращает к мастеру настройки. projects.json и папки проектов не удаляются.",
+    "resetButton": "Сбросить к настройке",
+    "resetConfirm": "Сбросить все настройки Dock и снова открыть мастер настройки?\n\nprojects.json и папки проектов не будут удалены.",
+    "resetting": "Сброс Dock…",
+    "resetFailed": "Не удалось выполнить сброс. Попробуйте снова или перезапустите Dock из трея."
   },
   "categories": {
     "title": "Категории",
@@ -130,8 +136,12 @@
     "folder": "Папка",
     "clone": "Клонировать",
     "targetDir": "Целевая папка: {dir}",
-    "noCategoryDir": "Папка для категории не найдена. Сначала добавьте проект или создайте папку вручную.",
+    "targetDirNew": "Папка будет создана: {dir}",
+    "noCategoryDir": "Не удалось определить папку для категории.",
     "noCategories": "Нет доступных категорий",
+    "uncategorized": "Корень workspace (без категории)",
+    "categoryRequired": "Выберите категорию",
+    "noHomePath": "Рабочая папка не найдена",
     "nameRequired": "Введите имя папки",
     "cancel": "Отмена",
     "create": "Создать"
@@ -151,13 +161,14 @@
   },
   "confirm": {
     "restartDashboard": "Перезапустить Dock?",
+    "restarting": "Перезапуск Dock…",
     "serverDown": "Сервер не отвечает. Откройте Dock из трея."
   },
   "prompt": {
     "projectPath": "Абсолютный путь к папке проекта:"
   },
   "onboarding": {
-    "subtitle": "Локальный хаб для ваших проектов. Без установки зависимостей — только Node.js.",
+    "subtitle": "Локальный хаб для ваших проектов.",
     "subtitleConfigured": " Можно изменить пути к рабочей папке и projects.json.",
     "step1": "1. Пути",
     "step2": "2. Готово",
@@ -178,7 +189,6 @@
     "jsonFound": "projects.json найден",
     "summaryHome": "Рабочая папка:",
     "summaryJson": "projects.json:",
-    "summaryHint": "Укажите в Project Manager «Projects Location» на этот файл. Dock и расширение используют один и тот же projects.json.",
     "homeRequired": "Укажите рабочую папку",
     "filePickerWindowsOnly": "Выбор файла доступен только на Windows — укажите путь вручную",
     "pickProjectsJson": "Выберите projects.json"

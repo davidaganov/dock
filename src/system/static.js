@@ -46,25 +46,15 @@ const serveStatic = (req, res, pathname) => {
 }
 
 const scheduleServerRestart = (server) => {
-  const script = path.join(ROOT_DIR, "start-win.bat")
-  const launcher =
-    process.platform === "win32" && fs.existsSync(script)
-      ? () =>
-          spawn("cmd.exe", ["/c", script, "server"], {
-            detached: true,
-            stdio: "ignore",
-            cwd: ROOT_DIR,
-            env: process.env,
-            windowsHide: true
-          })
-      : () =>
-          spawn(process.execPath, [path.join(ROOT_DIR, "server.js")], {
-            detached: true,
-            stdio: "ignore",
-            cwd: ROOT_DIR,
-            env: process.env,
-            windowsHide: true
-          })
+  const serverScript = path.join(ROOT_DIR, "server.js")
+  const launcher = () =>
+    spawn(process.execPath, [serverScript], {
+      detached: true,
+      stdio: "ignore",
+      cwd: ROOT_DIR,
+      env: process.env,
+      windowsHide: true
+    })
 
   setTimeout(() => {
     try {

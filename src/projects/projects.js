@@ -1,7 +1,7 @@
 const fs = require("fs")
 const crypto = require("crypto")
 const path = require("path")
-const { HIDDEN_TAG, UNCATEGORIZED_TAG } = require("../core/constants")
+const { UNCATEGORIZED_TAG } = require("../core/constants")
 const { getProjectsJsonPath } = require("../config/config")
 const { suppressProjectsWatch } = require("./projects-watch")
 
@@ -29,7 +29,7 @@ const normalizeProjectEntry = (raw) => {
 
   const id = typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : newProjectId()
   const tags = Array.isArray(raw.tags)
-    ? [...new Set(raw.tags.filter((t) => typeof t === "string"))]
+    ? [...new Set(raw.tags.filter((t) => typeof t === "string" && t))]
     : []
 
   return {
@@ -179,9 +179,6 @@ const hideProjectsByTag = (tag) => {
     if (project.enabled === false) continue
     if (primaryTag(project) !== tag) continue
     project.enabled = false
-    if (!project.tags.includes(HIDDEN_TAG)) {
-      project.tags = [...project.tags, HIDDEN_TAG]
-    }
     count++
   }
   saveProjectsJson(projects)
@@ -189,8 +186,7 @@ const hideProjectsByTag = (tag) => {
 }
 
 const primaryTag = (project) => {
-  const visible = (project.tags || []).filter((t) => t && t !== HIDDEN_TAG)
-  return visible[0] || UNCATEGORIZED_TAG
+  return (project.tags || [])[0] || UNCATEGORIZED_TAG
 }
 
 const projectsWithPrimaryTag = (projects, tag) => {
@@ -228,7 +224,6 @@ const validateLocalProjectDir = (dirPath) => {
 }
 
 module.exports = {
-  HIDDEN_TAG,
   isValidProjectId,
   newProjectId,
   loadProjects,

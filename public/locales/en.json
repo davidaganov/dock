@@ -101,7 +101,13 @@
     "saving": "Saving…",
     "saved": "Saved",
     "pickProjectsJson": "Select projects.json",
-    "filePickerWindowsOnly": "File picker is only available on Windows"
+    "filePickerWindowsOnly": "File picker is only available on Windows",
+    "resetTitle": "Reset",
+    "resetHint": "Clears Dock settings and returns to the setup wizard. Does not delete projects.json or project folders.",
+    "resetButton": "Reset to setup",
+    "resetConfirm": "Reset all Dock settings and open the setup wizard again?\n\nprojects.json and your project folders will not be deleted.",
+    "resetting": "Resetting Dock…",
+    "resetFailed": "Reset failed. Try again or restart Dock from the tray."
   },
   "categories": {
     "title": "Categories",
@@ -130,8 +136,12 @@
     "folder": "Folder",
     "clone": "Clone",
     "targetDir": "Target folder: {dir}",
-    "noCategoryDir": "No folder found for this category. Add a project first or create the folder manually.",
+    "targetDirNew": "Folder will be created: {dir}",
+    "noCategoryDir": "Could not resolve a folder for this category.",
     "noCategories": "No categories available",
+    "uncategorized": "Workspace root (no category)",
+    "categoryRequired": "Select a category",
+    "noHomePath": "Workspace folder not found",
     "nameRequired": "Enter a folder name",
     "cancel": "Cancel",
     "create": "Create"
@@ -151,13 +161,14 @@
   },
   "confirm": {
     "restartDashboard": "Restart Dock?",
+    "restarting": "Restarting Dock…",
     "serverDown": "Server is not responding. Open Dock from the tray."
   },
   "prompt": {
     "projectPath": "Absolute path to the project folder:"
   },
   "onboarding": {
-    "subtitle": "A local hub for your projects. No npm install — just Node.js.",
+    "subtitle": "A local hub for your projects.",
     "subtitleConfigured": " You can change the workspace folder and projects.json paths.",
     "step1": "1. Paths",
     "step2": "2. Done",
@@ -178,7 +189,6 @@
     "jsonFound": "projects.json found",
     "summaryHome": "Workspace folder:",
     "summaryJson": "projects.json:",
-    "summaryHint": "Point Project Manager’s “Projects Location” at this file. Dock and the extension share the same projects.json.",
     "homeRequired": "Enter a workspace folder",
     "filePickerWindowsOnly": "File picker is only available on Windows — enter the path manually",
     "pickProjectsJson": "Select projects.json"

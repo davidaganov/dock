@@ -21,7 +21,7 @@ Creates the HTTP server, routes `/api/*`, serves static files, listens on port `
 
 | File           | Role                                                      |
 | -------------- | --------------------------------------------------------- |
-| `constants.js` | Port, host, paths, `__hidden__` tag, MIME, scan skip dirs |
+| `constants.js` | Port, host, paths, MIME, scan skip dirs |
 | `http.js`      | `sendJson`, `readBody`                                    |
 | `paths.js`     | Default home / projects.json paths, path helpers          |
 

@@ -98,7 +98,6 @@ function renderSummary() {
   summary.innerHTML = `
     <p><strong>${escapeHtml(t("onboarding.summaryHome"))}</strong> ${escapeHtml(homeInput.value.trim())}</p>
     <p><strong>${escapeHtml(t("onboarding.summaryJson"))}</strong> ${escapeHtml(projectsJsonInput.value.trim())}</p>
-    <p class="hint">${escapeHtml(t("onboarding.summaryHint"))}</p>
   `
 }
 

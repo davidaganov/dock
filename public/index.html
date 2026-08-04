@@ -464,6 +464,25 @@
             </label>
           </section>
 
+          <section class="settings-block settings-block-compact">
+            <h3 data-i18n="settings.resetTitle">Reset</h3>
+            <p
+              class="settings-hint settings-hint-compact"
+              data-i18n="settings.resetHint"
+            >
+              Clears Dock settings and returns to the setup wizard. Does not delete projects.json
+              or project folders.
+            </p>
+            <button
+              type="button"
+              class="btn btn-danger btn-sm"
+              id="settings-reset-btn"
+              data-i18n="settings.resetButton"
+            >
+              Reset to setup
+            </button>
+          </section>
+
           <p
             class="settings-status"
             id="settings-status"
@@ -505,6 +524,23 @@
               class="settings-select"
             ></select>
           </label>
+          <div class="create-category-add-row">
+            <input
+              type="text"
+              id="create-category-new"
+              data-i18n-placeholder="categories.addPlaceholder"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              type="button"
+              class="btn btn-sm"
+              id="create-category-add-btn"
+              data-i18n="categories.add"
+            >
+              Add
+            </button>
+          </div>
           <p
             class="settings-hint settings-hint-compact"
             id="create-project-dir-hint"
@@ -572,6 +608,17 @@
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div
+      class="busy-overlay hidden"
+      id="busy-overlay"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div class="busy-overlay-card">
+        <p id="busy-overlay-msg"></p>
       </div>
     </div>
 

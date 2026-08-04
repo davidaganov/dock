@@ -1,7 +1,7 @@
 const path = require("path")
 const fs = require("fs")
 const { sendJson, readBody } = require("../core/http")
-const { loadConfig, saveConfig } = require("../config/config")
+const { loadConfig, saveConfig, resetDockConfig } = require("../config/config")
 const { loadProjects, parseTagLabel } = require("../projects/projects")
 const { loadPreferences, savePreferences } = require("../config/preferences")
 const {
@@ -14,6 +14,7 @@ const {
 const { UNCATEGORIZED_KEY } = require("../core/constants")
 const { resolveExistingDir, defaultProjectsJsonPath } = require("../core/paths")
 const { startProjectsWatch } = require("../projects/projects-watch")
+const { stopAllSessions } = require("../runtime/processes")
 
 const remapTagIconsByLabel = (tagIcons, tagOrder) => {
   const next = {}
@@ -31,6 +32,15 @@ const remapTagIconsByLabel = (tagIcons, tagOrder) => {
 }
 
 const handleSettingsApi = async (req, res, pathname) => {
+  if (req.method === "POST" && pathname === "/api/settings/reset") {
+    stopAllSessions()
+    resetDockConfig()
+    const { stopProjectsWatch, startProjectsWatch } = require("../projects/projects-watch")
+    stopProjectsWatch()
+    startProjectsWatch()
+    return sendJson(res, 200, { ok: true, redirect: "/onboarding.html" })
+  }
+
   if (pathname !== "/api/settings") return false
 
   if (req.method === "GET") {

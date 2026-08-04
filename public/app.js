@@ -25,6 +25,7 @@ let recentProjects = {}
 let projectOrder = {}
 let homePath = ""
 let activeTag = "__all__"
+let showHiddenOnly = false
 let selectedRepoId = null
 let searchQuery = ""
 let sidebarCollapsed = false
@@ -99,8 +100,7 @@ function primaryRunScript(repo) {
 
 function primaryTagOf(repo) {
   if (repo.primaryTag != null && repo.primaryTag !== "") return repo.primaryTag
-  const visible = (repo.tags || []).filter((t) => t && t !== "__hidden__")
-  return visible[0] || ""
+  return (repo.tags || [])[0] || ""
 }
 
 const ctxMenu = document.getElementById("ctx-menu")
@@ -137,7 +137,6 @@ function formatTagSidebarHtml(tag) {
 
 function formatTagHtml(tag, fallback = "") {
   if (!tag || tag === "__all__") return escapeHtml(fallback || t("list.allProjects"))
-  if (tag === "__hidden__") return t("sidebar.hidden")
   if (tag === UNCATEGORIZED_KEY) return escapeHtml(t("sidebar.uncategorized"))
   return escapeHtml(parseTagDisplay(tag).label)
 }
@@ -333,13 +332,13 @@ function getVisibleRepos() {
 }
 
 function getActiveRepoList() {
-  if (activeTag === "__hidden__") return getHiddenRepos()
+  if (showHiddenOnly) return getHiddenRepos()
   return getVisibleRepos()
 }
 
 function filterRepos(list) {
   let result = list
-  if (activeTag !== "__all__" && activeTag !== "__hidden__") {
+  if (!showHiddenOnly && activeTag !== "__all__") {
     if (activeTag === UNCATEGORIZED_KEY) {
       result = result.filter((r) => !primaryTagOf(r))
     } else {
@@ -411,7 +410,6 @@ function initSidebarDnD() {
     const item = handle.closest(".nav-item[data-tag]")
     if (
       !item?.dataset.tag ||
-      item.dataset.tag === "__hidden__" ||
       item.dataset.tag === UNCATEGORIZED_KEY
     )
       return
@@ -435,7 +433,6 @@ function initSidebarDnD() {
     if (
       !item ||
       item.dataset.tag === "__all__" ||
-      item.dataset.tag === "__hidden__" ||
       item.dataset.tag === UNCATEGORIZED_KEY
     )
       return
@@ -457,7 +454,6 @@ function initSidebarDnD() {
     if (
       !item ||
       item.dataset.tag === "__all__" ||
-      item.dataset.tag === "__hidden__" ||
       item.dataset.tag === UNCATEGORIZED_KEY
     )
       return
@@ -486,15 +482,16 @@ function initSidebarDnD() {
 }
 
 function selectSidebarTag(tag) {
+  showHiddenOnly = false
   activeTag = tag
   api("/api/preferences", {
     method: "PUT",
     body: JSON.stringify({
-      activeTag: activeTag === "__all__" || activeTag === "__hidden__" ? null : activeTag
+      activeTag: activeTag === "__all__" ? null : activeTag
     })
   }).catch(() => {})
   renderAll()
-  if (activeTag !== "__hidden__") hydrateGitForVisible()
+  hydrateGitForVisible()
 }
 
 async function hideCategory(tag) {
@@ -680,13 +677,13 @@ function renderSidebar() {
 }
 
 function updateSidebarFooter() {
-  document.getElementById("hidden-btn")?.classList.toggle("active", activeTag === "__hidden__")
+  document.getElementById("hidden-btn")?.classList.toggle("active", showHiddenOnly)
 }
 
 function renderProjectList() {
   const list = filterRepos(getActiveRepoList())
-  if (activeTag === "__hidden__") {
-    viewTitle.innerHTML = formatTagHtml("__hidden__")
+  if (showHiddenOnly) {
+    viewTitle.textContent = t("sidebar.hidden")
     viewCount.textContent = t("list.hiddenCount", { count: list.length })
   } else if (activeTag === UNCATEGORIZED_KEY) {
     viewTitle.textContent = t("sidebar.uncategorized")
@@ -1011,7 +1008,7 @@ function renderDetail() {
     ? `<a class="btn-icon-square" href="${escapeHtml(repo.githubUrl)}" target="_blank" rel="noopener" title="GitHub"><i class="mdi mdi-github"></i></a>`
     : ""
 
-  const isHiddenView = activeTag === "__hidden__" || repo.enabled === false
+  const isHiddenView = repo.enabled === false
   const tag = !isHiddenView && primaryTagOf(repo) ? primaryTagOf(repo) : ""
   const categoryBadge = tag
     ? `<span class="inspector-tag-badge"><i class="mdi ${getCategoryIcon(tag)}"></i> ${formatTagHtml(tag)}</span>`
@@ -1275,7 +1272,7 @@ async function loadRepos() {
   applyTerminalState()
 
   if (selectedRepoId && !repos.has(selectedRepoId)) selectedRepoId = null
-  if (activeTag !== "__hidden__" && activeTag !== "__all__" && !tags.includes(activeTag)) {
+  if (activeTag !== "__all__" && !tags.includes(activeTag)) {
     activeTag = "__all__"
   }
 
@@ -1288,7 +1285,7 @@ async function loadRepos() {
 }
 
 async function hydrateGitForVisible() {
-  if (activeTag === "__hidden__") return
+  if (showHiddenOnly) return
   const list = filterRepos(getVisibleRepos()).filter((r) => r.hasGit && r.path)
   if (!list.length) return
 
@@ -1897,7 +1894,7 @@ async function hideRepo(id) {
 async function showRepo(id) {
   await api(`/api/repos/${encodeURIComponent(id)}/show`, { method: "POST", body: "{}" })
   await loadRepos()
-  if (!getHiddenRepos().length && activeTag === "__hidden__") activeTag = "__all__"
+  if (!getHiddenRepos().length) showHiddenOnly = false
   renderAll()
 }
 
@@ -1974,31 +1971,28 @@ window.showRepo = showRepo
 window.openProjectMenu = openProjectMenu
 window.unregisterRepo = unregisterRepo
 
-async function waitForServerAndReload() {
-  for (let i = 0; i < 40; i++) {
-    await new Promise((r) => setTimeout(r, 500))
-    try {
-      const res = await fetch("/api/repos", { method: "GET" })
-      if (res.ok) {
-        location.reload()
-        return
-      }
-    } catch {
-      /* server still down */
-    }
-  }
-  alert(t("confirm.serverDown"))
+function showBusyOverlay(message) {
+  const overlay = document.getElementById("busy-overlay")
+  const msg = document.getElementById("busy-overlay-msg")
+  if (msg) msg.textContent = message || ""
+  overlay?.classList.remove("hidden")
+}
+
+function hideBusyOverlay() {
+  document.getElementById("busy-overlay")?.classList.add("hidden")
 }
 
 document.getElementById("terminal-refresh")?.addEventListener("click", () => loadRepos())
 document.getElementById("restart-btn").addEventListener("click", async () => {
   if (!confirm(t("confirm.restartDashboard"))) return
+  showBusyOverlay(t("confirm.restarting"))
   try {
     await api("/api/restart", { method: "POST", body: "{}" })
-  } catch {
-    /* connection lost while restarting */
+    location.reload()
+  } catch (err) {
+    hideBusyOverlay()
+    alert(err.message || t("confirm.serverDown"))
   }
-  waitForServerAndReload()
 })
 document.getElementById("terminal-maximize")?.addEventListener("click", (e) => {
   e.stopPropagation()
@@ -2069,7 +2063,9 @@ document.getElementById("detail-toggle")?.addEventListener("click", () => {
 })
 document.getElementById("add-project-btn").addEventListener("click", addProject)
 document.getElementById("hidden-btn").addEventListener("click", () => {
-  selectSidebarTag(activeTag === "__hidden__" ? "__all__" : "__hidden__")
+  showHiddenOnly = !showHiddenOnly
+  renderAll()
+  if (!showHiddenOnly) hydrateGitForVisible()
 })
 document.getElementById("brand-btn").addEventListener("click", () => {
   if (homePath) api("/api/explorer", { method: "POST", body: JSON.stringify({ path: homePath }) })
@@ -2285,11 +2281,12 @@ function getCreatableTags() {
 }
 
 function resolveDefaultCreateTag() {
-  if (activeTag !== "__all__" && activeTag !== "__hidden__" && activeTag !== UNCATEGORIZED_KEY) {
-    return activeTag
+  if (activeTag !== "__all__" && activeTag !== UNCATEGORIZED_KEY) {
+    const creatable = getCreatableTags()
+    if (creatable.includes(activeTag)) return activeTag
   }
   const creatable = getCreatableTags()
-  return creatable[0] || ""
+  return creatable[0] || UNCATEGORIZED_KEY
 }
 
 async function refreshCreateCategoryDir() {
@@ -2300,9 +2297,11 @@ async function refreshCreateCategoryDir() {
   }
   try {
     const data = await api(`/api/category-dir?tag=${encodeURIComponent(tag)}`)
-    createProjectDirHint.textContent = t("create.targetDir", { dir: data.dir })
+    const hint = data.exists === false ? t("create.targetDirNew", { dir: data.dir }) : t("create.targetDir", { dir: data.dir })
+    createProjectDirHint.textContent = hint
   } catch {
-    createProjectDirHint.textContent = t("create.noCategoryDir")
+    createProjectDirHint.textContent =
+      tag === UNCATEGORIZED_KEY ? t("create.noHomePath") : t("create.noCategoryDir")
   }
 }
 
@@ -2310,16 +2309,15 @@ function populateCreateCategories() {
   if (!createProjectCategory) return
   const creatable = getCreatableTags()
   const selected = resolveDefaultCreateTag()
-  createProjectCategory.innerHTML = creatable
-    .map((tag) => {
-      const label = parseTagDisplay(tag).label
-      const sel = tag === selected ? " selected" : ""
-      return `<option value="${escapeHtml(tag)}"${sel}>${escapeHtml(label)}</option>`
-    })
-    .join("")
-  if (!creatable.length) {
-    createProjectCategory.innerHTML = `<option value="">${escapeHtml(t("create.noCategories"))}</option>`
+  const options = [
+    `<option value="${UNCATEGORIZED_KEY}"${selected === UNCATEGORIZED_KEY ? " selected" : ""}>${escapeHtml(t("create.uncategorized"))}</option>`
+  ]
+  for (const tag of creatable) {
+    const label = parseTagDisplay(tag).label
+    const sel = tag === selected ? " selected" : ""
+    options.push(`<option value="${escapeHtml(tag)}"${sel}>${escapeHtml(label)}</option>`)
   }
+  createProjectCategory.innerHTML = options.join("")
   refreshCreateCategoryDir()
 }
 
@@ -2338,6 +2336,8 @@ function openCreateProject() {
   })
   if (createProjectName) createProjectName.value = ""
   if (createProjectRepo) createProjectRepo.value = ""
+  const createCategoryNew = document.getElementById("create-category-new")
+  if (createCategoryNew) createCategoryNew.value = ""
   setCreateProjectStatus("")
   populateCreateCategories()
   updateCreateMethodUI()
@@ -2351,7 +2351,7 @@ function closeCreateProject() {
 async function submitCreateProject() {
   const tag = createProjectCategory?.value
   if (!tag) {
-    setCreateProjectStatus(t("create.noCategories"), true)
+    setCreateProjectStatus(t("create.categoryRequired"), true)
     return
   }
   setCreateProjectStatus("")
@@ -2376,12 +2376,31 @@ async function submitCreateProject() {
       closeCreateProject()
     }
   } catch (err) {
-    const key = err.message === "categoryDirNotFound" ? t("create.noCategoryDir") : err.message
+    const key =
+      err.message === "categoryDirNotFound"
+        ? t("create.noCategoryDir")
+        : err.message === "homePathNotFound"
+          ? t("create.noHomePath")
+          : err.message
     setCreateProjectStatus(key, true)
   }
 }
 
 document.getElementById("settings-close")?.addEventListener("click", closeSettings)
+document.getElementById("settings-reset-btn")?.addEventListener("click", async () => {
+  if (!confirm(t("settings.resetConfirm"))) return
+  closeSettings()
+  showBusyOverlay(t("settings.resetting"))
+  try {
+    localStorage.removeItem("dock-term-body-h")
+    localStorage.removeItem("locale")
+    const data = await api("/api/settings/reset", { method: "POST", body: "{}" })
+    location.replace(data.redirect || "/onboarding.html")
+  } catch (err) {
+    hideBusyOverlay()
+    alert(err.message || t("settings.resetFailed"))
+  }
+})
 settingsOverlay?.addEventListener("click", (e) => {
   if (e.target === settingsOverlay) closeSettings()
 })
@@ -2393,6 +2412,30 @@ createProjectOverlay?.addEventListener("click", (e) => {
   if (e.target === createProjectOverlay) closeCreateProject()
 })
 createProjectCategory?.addEventListener("change", refreshCreateCategoryDir)
+
+document.getElementById("create-category-add-btn")?.addEventListener("click", async () => {
+  const input = document.getElementById("create-category-new")
+  const name = input?.value?.trim()
+  if (!name) return
+  try {
+    const data = await api("/api/tags", { method: "POST", body: JSON.stringify({ name }) })
+    tags = data.tags || tags
+    if (data.tagIcons) tagIcons = data.tagIcons
+    if (input) input.value = ""
+    renderSidebar()
+    populateCreateCategories()
+    if (data.tag && createProjectCategory) createProjectCategory.value = data.tag
+    setCreateProjectStatus("")
+    refreshCreateCategoryDir()
+  } catch (err) {
+    setCreateProjectStatus(err.message, true)
+  }
+})
+
+document.getElementById("create-category-new")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("create-category-add-btn")?.click()
+})
+
 createMethodTabs?.querySelectorAll(".create-method-tab").forEach((btn) => {
   btn.addEventListener("click", () => {
     createProjectMethod = btn.dataset.method || "folder"
