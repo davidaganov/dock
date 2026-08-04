@@ -1,0 +1,17 @@
+{
+  "envFile": ".env",
+  "json": {
+    "provider": "gemini",
+    "model": "gemini-flash-latest",
+    "envVarName": "POLYGLOT_API_KEY",
+    "localeFormat": "short",
+    "locales": ["EN", "RU"],
+    "defaultLocale": "EN",
+    "localesDir": "public/locales",
+    "trackChanges": "carefully",
+    "batchSize": 200,
+    "batchDelay": 2000,
+    "retryDelay": 35000,
+    "maxRetries": 3
+  }
+}

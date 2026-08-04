@@ -1,0 +1,10 @@
+node_modules
+tray/bin
+tray/obj
+dock-config.json
+.polyglot-lock.json
+coverage
+package-lock.json
+*.log
+.env
+.env.*

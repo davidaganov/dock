@@ -1,0 +1,45 @@
+{
+  "name": "dock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local multi-project developer hub — run scripts, git, terminal, and categories from one place",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "translate": "polyglot-keeper sync",
+    "tray:build": "dotnet build tray -c Release"
+  },
+  "keywords": [
+    "developer-tools",
+    "dashboard",
+    "local",
+    "projects",
+    "npm-scripts",
+    "git",
+    "terminal",
+    "tray",
+    "monorepo"
+  ],
+  "homepage": "https://github.com/davidaganov/dock#readme",
+  "bugs": {
+    "url": "https://github.com/davidaganov/dock/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidaganov/dock.git"
+  },
+  "author": {
+    "name": "David Aganov",
+    "url": "https://aganov.dev"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "polyglot-keeper": "^1.3.2",
+    "prettier": "^3.8.3"
+  }
+}

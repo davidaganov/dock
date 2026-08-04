@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Dock</title>
+    <link
+      rel="icon"
+      href="/favicon.ico"
+      type="image/x-icon"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="/style.css"
+    />
+  </head>
+  <body data-page-title="meta.title">
+    <div
+      class="app-shell"
+      id="app"
+    >
+      <header class="app-header">
+        <div class="app-header-left">
+          <button
+            type="button"
+            class="icon-btn icon-btn-sm"
+            id="sidebar-toggle"
+            data-i18n-title="header.menu"
+          >
+            <i class="mdi mdi-menu"></i>
+          </button>
+          <button
+            type="button"
+            class="header-brand"
+            id="brand-btn"
+            data-i18n-title="header.openHome"
+          >
+            <i class="mdi mdi-dock-window"></i>
+            <span data-i18n="meta.brand">Dock</span>
+          </button>
+        </div>
+        <div class="app-header-right">
+          <button
+            type="button"
+            class="lang-toggle"
+            id="lang-toggle"
+            data-i18n-title="header.language"
+          >
+            <span id="lang-label">EN</span>
+          </button>
+          <label class="search-wrap">
+            <i class="mdi mdi-magnify"></i>
+            <input
+              type="search"
+              class="search-input"
+              id="search-input"
+              data-i18n-placeholder="header.search"
+            />
+          </label>
+        </div>
+      </header>
+
+      <div class="app-body">
+        <aside
+          class="sidebar"
+          id="sidebar"
+        >
+          <nav
+            class="sidebar-nav"
+            id="sidebar-nav"
+          >
+            <button
+              type="button"
+              class="sb-row nav-item-static active"
+              data-tag="__all__"
+            >
+              <i class="mdi mdi-folder-multiple-outline sb-row-icon"></i>
+              <span
+                class="sb-row-label"
+                data-i18n="sidebar.allProjects"
+              >
+                All projects
+              </span>
+            </button>
+          </nav>
+
+          <div class="sidebar-footer">
+            <button
+              type="button"
+              class="sb-footer-btn"
+              id="add-project-btn"
+              data-i18n-title="sidebar.addProject"
+            >
+              <i class="mdi mdi-plus"></i>
+            </button>
+            <button
+              type="button"
+              class="sb-footer-btn"
+              id="hidden-btn"
+              data-i18n-title="sidebar.hiddenProjects"
+            >
+              <i class="mdi mdi-eye-off-outline"></i>
+            </button>
+            <button
+              type="button"
+              class="sb-footer-btn"
+              id="settings-btn"
+              data-i18n-title="sidebar.settings"
+            >
+              <i class="mdi mdi-cog-outline"></i>
+            </button>
+            <button
+              type="button"
+              class="sb-footer-btn"
+              id="restart-btn"
+              data-i18n-title="sidebar.restart"
+            >
+              <i class="mdi mdi-refresh"></i>
+            </button>
+          </div>
+        </aside>
+
+        <div class="workspace">
+          <div class="main-panels">
+            <section class="project-list-panel">
+              <div class="center-header">
+                <div class="center-header-left">
+                  <h1
+                    class="view-title"
+                    id="view-title"
+                    data-i18n="list.allProjects"
+                  >
+                    All projects
+                  </h1>
+                  <span
+                    class="view-count"
+                    id="view-count"
+                  ></span>
+                </div>
+                <div class="list-controls">
+                  <button
+                    type="button"
+                    class="list-sort-btn"
+                    id="list-sort-btn"
+                    data-i18n-title="list.sort"
+                  >
+                    <span id="list-sort-label">By name</span>
+                    <i class="mdi mdi-chevron-down"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn-sm list-filter-btn hidden"
+                    id="filter-clear"
+                    data-i18n-title="list.clearFilters"
+                  >
+                    <i class="mdi mdi-close"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn-sm list-filter-btn"
+                    id="filter-running"
+                    data-i18n-title="list.filterRunning"
+                  >
+                    <i class="mdi mdi-play-circle-outline"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn-sm list-filter-btn"
+                    id="filter-dirty"
+                    data-i18n-title="list.filterDirty"
+                  >
+                    <i class="mdi mdi-circle-half-full"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn-sm"
+                    id="list-view-toggle"
+                    data-i18n-title="list.viewToggle"
+                  >
+                    <i
+                      class="mdi mdi-view-grid-outline"
+                      id="list-view-icon"
+                    ></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn-sm"
+                    id="detail-toggle"
+                    data-i18n-title="list.hideDetail"
+                  >
+                    <i
+                      class="mdi mdi-dock-right"
+                      id="detail-toggle-icon"
+                    ></i>
+                  </button>
+                </div>
+              </div>
+              <div class="list-header">
+                <span>
+                  <i class="mdi mdi-folder-outline"></i>
+                  <span data-i18n="list.name">Name</span>
+                </span>
+                <span>
+                  <i class="mdi mdi-source-branch"></i>
+                  <span data-i18n="list.branch">Branch</span>
+                </span>
+              </div>
+              <div
+                class="project-list"
+                id="project-list"
+              >
+                <div
+                  class="empty-state"
+                  data-i18n="list.loading"
+                >
+                  Loading…
+                </div>
+              </div>
+            </section>
+
+            <section
+              class="detail-panel"
+              id="detail-panel"
+            >
+              <div
+                class="detail-empty"
+                id="detail-empty"
+              >
+                <i class="mdi mdi-cursor-default-click-outline"></i>
+                <span data-i18n="detail.selectProject">Select a project</span>
+              </div>
+              <div
+                class="detail-content hidden"
+                id="detail-content"
+              ></div>
+            </section>
+          </div>
+
+          <footer
+            class="term-strip"
+            id="bottom-bar"
+          >
+            <div
+              class="term-resize-handle"
+              id="term-resize-handle"
+              title="Resize"
+            ></div>
+            <div class="term-strip-toolbar">
+              <div
+                class="term-tabs"
+                id="session-tabs"
+              ></div>
+              <div class="term-toolbar-actions">
+                <button
+                  type="button"
+                  class="term-tool-btn"
+                  id="terminal-refresh"
+                  data-i18n-title="terminal.refresh"
+                >
+                  <i class="mdi mdi-refresh"></i>
+                </button>
+                <button
+                  type="button"
+                  class="term-tool-btn"
+                  id="stop-btn"
+                  data-i18n-title="terminal.stop"
+                  disabled
+                >
+                  <i class="mdi mdi-stop"></i>
+                </button>
+                <button
+                  type="button"
+                  class="term-tool-btn"
+                  id="terminal-toggle"
+                  data-i18n-title="terminal.collapse"
+                >
+                  <i
+                    class="mdi mdi-chevron-down"
+                    id="terminal-toggle-icon"
+                  ></i>
+                </button>
+                <button
+                  type="button"
+                  class="term-tool-btn"
+                  id="terminal-maximize"
+                  data-i18n-title="terminal.maximize"
+                >
+                  <i
+                    class="mdi mdi-arrow-expand"
+                    id="terminal-maximize-icon"
+                  ></i>
+                </button>
+                <button
+                  type="button"
+                  class="term-tool-btn term-tool-danger"
+                  id="terminal-close-all"
+                  data-i18n-title="terminal.closeAll"
+                >
+                  <i class="mdi mdi-close"></i>
+                </button>
+              </div>
+            </div>
+            <div
+              class="term-strip-body"
+              id="bottom-bar-body"
+            >
+              <form
+                class="term-input-row"
+                id="terminal-form"
+              >
+                <span
+                  class="terminal-prompt"
+                  id="terminal-prompt"
+                >
+                  $
+                </span>
+                <input
+                  type="text"
+                  class="terminal-input"
+                  id="terminal-input"
+                  data-i18n-placeholder="terminal.command"
+                  disabled
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </form>
+              <pre
+                class="log-output"
+                id="log-output"
+              ></pre>
+            </div>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="ctx-menu hidden"
+      id="ctx-menu"
+    ></div>
+
+    <div
+      class="settings-overlay hidden"
+      id="settings-overlay"
+    >
+      <div
+        class="settings-panel"
+        role="dialog"
+        aria-labelledby="settings-title"
+      >
+        <header class="settings-panel-header">
+          <h2
+            id="settings-title"
+            data-i18n="settings.title"
+          >
+            Settings
+          </h2>
+          <button
+            type="button"
+            class="icon-btn"
+            id="settings-close"
+            data-i18n-title="settings.close"
+          >
+            <i class="mdi mdi-close"></i>
+          </button>
+        </header>
+
+        <div class="settings-panel-body">
+          <section class="settings-block">
+            <h3 data-i18n="settings.projects">Projects</h3>
+            <label class="settings-field">
+              <span data-i18n="settings.homePath">Workspace folder</span>
+              <div class="settings-field-row">
+                <input
+                  type="text"
+                  id="setting-home-path"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  id="setting-pick-home"
+                  data-i18n="settings.browse"
+                >
+                  Browse
+                </button>
+              </div>
+            </label>
+            <label class="settings-field">
+              <span data-i18n="settings.projectsJson">projects.json file</span>
+              <div class="settings-field-row">
+                <input
+                  type="text"
+                  id="setting-projects-json"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  id="setting-pick-json"
+                  data-i18n="settings.browse"
+                >
+                  Browse
+                </button>
+              </div>
+            </label>
+            <p
+              class="settings-hint settings-hint-compact"
+              data-i18n="settings.projectsJsonHint"
+            >
+              Shared with the VS Code / Cursor Project Manager extension. Set its “Projects Location”
+              to this folder — edits in either Dock or the IDE stay in sync.
+            </p>
+          </section>
+
+          <section class="settings-block settings-block-compact">
+            <h3 data-i18n="categories.title">Categories</h3>
+            <p
+              class="settings-hint settings-hint-compact"
+              data-i18n="categories.hint"
+            >
+              Drag to reorder.
+            </p>
+            <div
+              class="categories-list"
+              id="categories-list"
+            ></div>
+            <div class="categories-add-row">
+              <input
+                type="text"
+                id="category-add-input"
+                data-i18n-placeholder="categories.addPlaceholder"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button
+                type="button"
+                class="btn btn-sm"
+                id="category-add-btn"
+                data-i18n="categories.add"
+              >
+                Add
+              </button>
+            </div>
+            <label class="settings-toggle settings-toggle-compact">
+              <input
+                type="checkbox"
+                id="categories-use-prefixes"
+              />
+              <span class="settings-toggle-body">
+                <strong data-i18n="categories.usePrefixes">
+                  Enable `01.` prefixes in `projects.json`
+                </strong>
+              </span>
+            </label>
+          </section>
+
+          <p
+            class="settings-status"
+            id="settings-status"
+          ></p>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="settings-overlay hidden"
+      id="create-project-overlay"
+    >
+      <div
+        class="settings-panel create-project-panel"
+        role="dialog"
+        aria-labelledby="create-project-title"
+      >
+        <header class="settings-panel-header">
+          <h2
+            id="create-project-title"
+            data-i18n="create.title"
+          >
+            New project
+          </h2>
+          <button
+            type="button"
+            class="icon-btn"
+            id="create-project-close"
+            data-i18n-title="create.close"
+          >
+            <i class="mdi mdi-close"></i>
+          </button>
+        </header>
+        <div class="settings-panel-body">
+          <label class="settings-field">
+            <span data-i18n="create.category">Category</span>
+            <select
+              id="create-project-category"
+              class="settings-select"
+            ></select>
+          </label>
+          <p
+            class="settings-hint settings-hint-compact"
+            id="create-project-dir-hint"
+          ></p>
+          <div
+            class="create-method-tabs"
+            id="create-method-tabs"
+          >
+            <button
+              type="button"
+              class="create-method-tab active"
+              data-method="folder"
+              data-i18n="create.folder"
+            >
+              Folder
+            </button>
+            <button
+              type="button"
+              class="create-method-tab"
+              data-method="clone"
+              data-i18n="create.clone"
+            >
+              Clone
+            </button>
+          </div>
+          <label class="settings-field create-field-name">
+            <span data-i18n="create.name">Folder name</span>
+            <input
+              type="text"
+              id="create-project-name"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <label class="settings-field create-field-clone hidden">
+            <span data-i18n="create.repoUrl">Repository URL</span>
+            <input
+              type="text"
+              id="create-project-repo"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="https://github.com/user/repo.git"
+            />
+          </label>
+          <p
+            class="settings-status"
+            id="create-project-status"
+          ></p>
+          <div class="create-project-actions">
+            <button
+              type="button"
+              class="btn btn-sm"
+              id="create-project-cancel"
+              data-i18n="create.cancel"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              id="create-project-submit"
+              data-i18n="create.create"
+            >
+              Create
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/i18n.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

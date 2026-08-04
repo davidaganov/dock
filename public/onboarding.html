@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Setup — Dock</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="/onboarding.css"
+    />
+  </head>
+  <body data-page-title="meta.onboardingTitle">
+    <div class="onboarding">
+      <header class="onboarding-header">
+        <div class="onboarding-header-top">
+          <h1 data-i18n="meta.brand">Dock</h1>
+          <button
+            type="button"
+            class="lang-toggle"
+            id="lang-toggle"
+            data-i18n-title="header.language"
+          >
+            <span id="lang-label">EN</span>
+          </button>
+        </div>
+        <p
+          class="subtitle"
+          data-i18n="onboarding.subtitle"
+        >
+          A local hub for your projects. No npm install — just Node.js.
+        </p>
+      </header>
+
+      <div
+        class="steps"
+        id="steps-indicator"
+      >
+        <span
+          class="step active"
+          data-step="1"
+          data-i18n="onboarding.step1"
+        >
+          1. Paths
+        </span>
+        <span
+          class="step"
+          data-step="2"
+          data-i18n="onboarding.step2"
+        >
+          2. Done
+        </span>
+      </div>
+
+      <section
+        class="panel"
+        id="step-1"
+      >
+        <h2 data-i18n="onboarding.pathsTitle">Set up paths</h2>
+        <p
+          class="hint"
+          data-i18n="onboarding.pathsHint"
+        >
+          Workspace folder is the root for opening projects. projects.json is shared with the VS Code /
+          Cursor Project Manager extension — changes on either side are picked up automatically.
+        </p>
+
+        <label class="field">
+          <span data-i18n="onboarding.homePath">Workspace folder</span>
+          <div class="field-row">
+            <input
+              type="text"
+              id="home-path"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              type="button"
+              class="btn"
+              id="pick-home"
+              data-i18n="onboarding.browse"
+            >
+              Browse
+            </button>
+          </div>
+        </label>
+
+        <label class="field">
+          <span data-i18n="onboarding.projectsJson">projects.json file</span>
+          <div class="field-row">
+            <input
+              type="text"
+              id="projects-json-path"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              type="button"
+              class="btn"
+              id="pick-projects-json"
+              data-i18n="onboarding.browse"
+            >
+              Browse
+            </button>
+          </div>
+        </label>
+
+        <div
+          class="path-status"
+          id="path-status"
+        ></div>
+
+        <div class="actions">
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="step1-next"
+            data-i18n="onboarding.next"
+          >
+            Next →
+          </button>
+        </div>
+      </section>
+
+      <section
+        class="panel hidden"
+        id="step-2"
+      >
+        <h2 data-i18n="onboarding.doneTitle">Done</h2>
+        <div
+          class="summary"
+          id="summary"
+        ></div>
+        <div class="actions">
+          <button
+            type="button"
+            class="btn"
+            id="step2-back"
+            data-i18n="onboarding.back"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="step2-finish"
+            data-i18n="onboarding.finish"
+          >
+            Open Dock
+          </button>
+        </div>
+      </section>
+
+      <p
+        class="error"
+        id="error-msg"
+        hidden
+      ></p>
+    </div>
+
+    <script src="/i18n.js"></script>
+    <script src="/onboarding.js"></script>
+  </body>
+</html>

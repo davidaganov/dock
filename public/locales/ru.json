@@ -1,0 +1,196 @@
+{
+  "meta": {
+    "title": "Dock",
+    "brand": "Dock",
+    "onboardingTitle": "Настройка — Dock"
+  },
+  "header": {
+    "menu": "Меню",
+    "openHome": "Открыть рабочую папку",
+    "search": "Поиск…",
+    "language": "Сменить язык"
+  },
+  "sidebar": {
+    "allProjects": "Все проекты",
+    "hidden": "Скрытые",
+    "addProject": "Добавить проект",
+    "hiddenProjects": "Скрытые проекты",
+    "settings": "Настройки",
+    "restart": "Перезапустить Dock",
+    "drag": "Перетащите",
+    "actions": "Действия",
+    "uncategorized": "Без категории",
+    "manageCategories": "Управление категориями"
+  },
+  "list": {
+    "allProjects": "Все проекты",
+    "projectsCount": "{count} проектов",
+    "hiddenCount": "{count} скрытых",
+    "loading": "Загрузка…",
+    "empty": "Нет проектов",
+    "name": "Имя",
+    "branch": "Ветка",
+    "sort": "Сортировка",
+    "filterRunning": "Только запущенные",
+    "filterDirty": "Только с изменениями",
+    "viewToggle": "Вид списка",
+    "showDetail": "Показать панель проекта",
+    "hideDetail": "Скрыть панель проекта",
+    "changes": "Изменения",
+    "clearFilters": "Сбросить фильтры",
+    "dragProject": "Перетащите для сортировки"
+  },
+  "sort": {
+    "name": "По имени",
+    "recent": "Недавние",
+    "custom": "Свой порядок"
+  },
+  "detail": {
+    "selectProject": "Выберите проект",
+    "openFolder": "Открыть папку",
+    "openIde": "Открыть в IDE",
+    "actions": "Действия",
+    "branchSearch": "Поиск ветки…",
+    "noBranches": "Нет веток",
+    "startDevHint": "Запустите dev-сервер"
+  },
+  "open": {
+    "openApp": "Открыть",
+    "documentation": "Документация"
+  },
+  "scripts": {
+    "run": "Run",
+    "utilities": "Utilities",
+    "count": "{count} скриптов",
+    "empty": "Нет npm-скриптов (package.json отсутствует или пуст)",
+    "restart": "Перезапустить",
+    "stop": "Остановить",
+    "play": "Запустить",
+    "restartNamed": "Перезапустить {name}",
+    "playNamed": "Запустить {name}",
+    "drag": "Перетащите"
+  },
+  "status": {
+    "running": "Запущен процесс",
+    "dirty": "Есть незакоммиченные изменения",
+    "clean": "Чисто",
+    "noGit": "Нет git"
+  },
+  "terminal": {
+    "refresh": "Обновить",
+    "stop": "Остановить",
+    "collapse": "Свернуть",
+    "expand": "Развернуть",
+    "maximize": "На весь экран",
+    "closeAll": "Закрыть все вкладки",
+    "closeTab": "Закрыть",
+    "command": "команда…",
+    "commandHint": "npm run test, git status…",
+    "pathUnavailable": "путь недоступен",
+    "selectProject": "выберите проект"
+  },
+  "settings": {
+    "title": "Настройки",
+    "close": "Закрыть",
+    "manageCategories": "Категории…",
+    "projects": "Проекты",
+    "homePath": "Рабочая папка",
+    "projectsJson": "Файл projects.json",
+    "projectsJsonHint": "Общий файл с расширением Project Manager в VS Code / Cursor. Укажите «Projects Location» на этот файл — правки в Dock и в IDE синхронизируются.",
+    "browse": "Обзор",
+    "saving": "Сохранение…",
+    "saved": "Сохранено",
+    "pickProjectsJson": "Выберите projects.json",
+    "filePickerWindowsOnly": "Выбор файла доступен только на Windows"
+  },
+  "categories": {
+    "title": "Категории",
+    "close": "Закрыть",
+    "hint": "Перетащите для изменения порядка. Порядок сохраняется в настройках.",
+    "usePrefixes": "Включить префиксы `01.` в `projects.json`",
+    "addPlaceholder": "Новая категория…",
+    "add": "Добавить",
+    "delete": "Удалить",
+    "deleteConfirm": "Удалить категорию «{name}»? Проекты переместятся в «Без категории».",
+    "empty": "Категорий пока нет",
+    "usePrefixesEnable": "Префиксы «01.» будут добавлены в projects.json по текущему порядку категорий. Продолжить?",
+    "usePrefixesDisable": "Префиксы «01.» будут удалены из projects.json. Порядок сохранится в настройках. Продолжить?"
+  },
+  "log": {
+    "projectAdded": "Добавлен проект: {name} → {path}",
+    "projectRemoved": "Удалён проект: {name}",
+    "processStarting": "Запуск"
+  },
+  "create": {
+    "title": "Новый проект",
+    "close": "Закрыть",
+    "category": "Категория",
+    "name": "Имя папки",
+    "repoUrl": "URL репозитория",
+    "folder": "Папка",
+    "clone": "Клонировать",
+    "targetDir": "Целевая папка: {dir}",
+    "noCategoryDir": "Папка для категории не найдена. Сначала добавьте проект или создайте папку вручную.",
+    "noCategories": "Нет доступных категорий",
+    "nameRequired": "Введите имя папки",
+    "cancel": "Отмена",
+    "create": "Создать"
+  },
+  "context": {
+    "hideCategory": "Скрыть категорию",
+    "hideCategoryConfirm": "Скрыть категорию и все {count} проект(ов)?",
+    "renameCategory": "Переименовать",
+    "renameCategoryPrompt": "Новое название категории:",
+    "changeIcon": "Сменить иконку",
+    "restore": "Вернуть",
+    "hide": "Скрыть",
+    "moveTo": "Переместить в…",
+    "moveUncategorized": "Без категории",
+    "delete": "Удалить",
+    "deleteProjectConfirm": "Удалить проект из списка?"
+  },
+  "confirm": {
+    "restartDashboard": "Перезапустить Dock?",
+    "serverDown": "Сервер не отвечает. Откройте Dock из трея."
+  },
+  "prompt": {
+    "projectPath": "Абсолютный путь к папке проекта:"
+  },
+  "onboarding": {
+    "subtitle": "Локальный хаб для ваших проектов. Без установки зависимостей — только Node.js.",
+    "subtitleConfigured": " Можно изменить пути к рабочей папке и projects.json.",
+    "step1": "1. Пути",
+    "step2": "2. Готово",
+    "pathsTitle": "Укажите пути",
+    "pathsHint": "Рабочая папка — корень для открытия проектов. projects.json общий с расширением Project Manager в VS Code / Cursor — изменения с любой стороны подхватываются автоматически.",
+    "homePath": "Рабочая папка",
+    "projectsJson": "Файл projects.json",
+    "browse": "Обзор",
+    "next": "Далее →",
+    "doneTitle": "Готово",
+    "back": "← Назад",
+    "finish": "Открыть Dock",
+    "folderMissing": "Папка <code>{path}</code> не существует.",
+    "createFolder": "Создать папку",
+    "folderFound": "Папка найдена",
+    "jsonMissing": "Файл <code>{path}</code> не существует.",
+    "createFile": "Создать файл",
+    "jsonFound": "projects.json найден",
+    "summaryHome": "Рабочая папка:",
+    "summaryJson": "projects.json:",
+    "summaryHint": "Укажите в Project Manager «Projects Location» на этот файл. Dock и расширение используют один и тот же projects.json.",
+    "homeRequired": "Укажите рабочую папку",
+    "filePickerWindowsOnly": "Выбор файла доступен только на Windows — укажите путь вручную",
+    "pickProjectsJson": "Выберите projects.json"
+  },
+  "tray": {
+    "open": "Открыть",
+    "files": "Файлы",
+    "restart": "Перезапуск",
+    "exit": "Выход",
+    "serverStartFailed": "Не удалось запустить сервер:\n{error}",
+    "serverNotStarted": "Сервер не запустился. Проверьте Node.js / fnm.",
+    "restarting": "Останавливаю процессы и перезапускаю…",
+    "restartFailed": "Не удалось перезапустить: {error}"
+  }
+}

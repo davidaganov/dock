@@ -1,0 +1,196 @@
+{
+  "meta": {
+    "title": "Dock",
+    "brand": "Dock",
+    "onboardingTitle": "Setup — Dock"
+  },
+  "header": {
+    "menu": "Menu",
+    "openHome": "Open workspace folder",
+    "search": "Search…",
+    "language": "Change language"
+  },
+  "sidebar": {
+    "allProjects": "All projects",
+    "hidden": "Hidden",
+    "addProject": "Add project",
+    "hiddenProjects": "Hidden projects",
+    "settings": "Settings",
+    "restart": "Restart Dock",
+    "drag": "Drag to reorder",
+    "actions": "Actions",
+    "uncategorized": "Uncategorized",
+    "manageCategories": "Manage categories"
+  },
+  "list": {
+    "allProjects": "All projects",
+    "projectsCount": "{count} projects",
+    "hiddenCount": "{count} hidden",
+    "loading": "Loading…",
+    "empty": "No projects",
+    "name": "Name",
+    "branch": "Branch",
+    "sort": "Sort",
+    "filterRunning": "Running only",
+    "filterDirty": "With changes only",
+    "viewToggle": "List view",
+    "showDetail": "Show project panel",
+    "hideDetail": "Hide project panel",
+    "changes": "Changes",
+    "clearFilters": "Clear filters",
+    "dragProject": "Drag to reorder"
+  },
+  "sort": {
+    "name": "By name",
+    "recent": "Recent",
+    "custom": "Custom order"
+  },
+  "detail": {
+    "selectProject": "Select a project",
+    "openFolder": "Open folder",
+    "openIde": "Open in IDE",
+    "actions": "Actions",
+    "branchSearch": "Search branches…",
+    "noBranches": "No branches",
+    "startDevHint": "Start the dev server"
+  },
+  "open": {
+    "openApp": "Open",
+    "documentation": "Documentation"
+  },
+  "scripts": {
+    "run": "Run",
+    "utilities": "Utilities",
+    "count": "{count} scripts",
+    "empty": "No npm scripts (package.json is missing or empty)",
+    "restart": "Restart",
+    "stop": "Stop",
+    "play": "Run",
+    "restartNamed": "Restart {name}",
+    "playNamed": "Run {name}",
+    "drag": "Drag to reorder"
+  },
+  "status": {
+    "running": "Process running",
+    "dirty": "Uncommitted changes",
+    "clean": "Clean",
+    "noGit": "No git"
+  },
+  "terminal": {
+    "refresh": "Refresh",
+    "stop": "Stop",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "maximize": "Full screen",
+    "closeAll": "Close all tabs",
+    "closeTab": "Close",
+    "command": "command…",
+    "commandHint": "npm run test, git status…",
+    "pathUnavailable": "path unavailable",
+    "selectProject": "select a project"
+  },
+  "settings": {
+    "title": "Settings",
+    "close": "Close",
+    "manageCategories": "Categories…",
+    "projects": "Projects",
+    "homePath": "Workspace folder",
+    "projectsJson": "projects.json file",
+    "projectsJsonHint": "Shared with the VS Code / Cursor Project Manager extension. Set its “Projects Location” to this file — edits in either Dock or the IDE stay in sync.",
+    "browse": "Browse",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "pickProjectsJson": "Select projects.json",
+    "filePickerWindowsOnly": "File picker is only available on Windows"
+  },
+  "categories": {
+    "title": "Categories",
+    "close": "Close",
+    "hint": "Drag to reorder. Order is saved in Dock settings.",
+    "usePrefixes": "Enable `01.` prefixes in `projects.json`",
+    "addPlaceholder": "New category…",
+    "add": "Add",
+    "delete": "Delete",
+    "deleteConfirm": "Delete category \"{name}\"? Projects will move to Uncategorized.",
+    "empty": "No categories yet",
+    "usePrefixesEnable": "Prefixes like \"01.\" will be added to projects.json from the current category order. Continue?",
+    "usePrefixesDisable": "Prefixes like \"01.\" will be removed from projects.json. Order stays in settings. Continue?"
+  },
+  "log": {
+    "projectAdded": "Project added: {name} → {path}",
+    "projectRemoved": "Project removed: {name}",
+    "processStarting": "Starting"
+  },
+  "create": {
+    "title": "New project",
+    "close": "Close",
+    "category": "Category",
+    "name": "Folder name",
+    "repoUrl": "Repository URL",
+    "folder": "Folder",
+    "clone": "Clone",
+    "targetDir": "Target folder: {dir}",
+    "noCategoryDir": "No folder found for this category. Add a project first or create the folder manually.",
+    "noCategories": "No categories available",
+    "nameRequired": "Enter a folder name",
+    "cancel": "Cancel",
+    "create": "Create"
+  },
+  "context": {
+    "hideCategory": "Hide category",
+    "hideCategoryConfirm": "Hide category and all {count} project(s)?",
+    "renameCategory": "Rename",
+    "renameCategoryPrompt": "New category name:",
+    "changeIcon": "Change icon",
+    "restore": "Restore",
+    "hide": "Hide",
+    "moveTo": "Move to…",
+    "moveUncategorized": "Uncategorized",
+    "delete": "Delete",
+    "deleteProjectConfirm": "Remove project from the list?"
+  },
+  "confirm": {
+    "restartDashboard": "Restart Dock?",
+    "serverDown": "Server is not responding. Open Dock from the tray."
+  },
+  "prompt": {
+    "projectPath": "Absolute path to the project folder:"
+  },
+  "onboarding": {
+    "subtitle": "A local hub for your projects. No npm install — just Node.js.",
+    "subtitleConfigured": " You can change the workspace folder and projects.json paths.",
+    "step1": "1. Paths",
+    "step2": "2. Done",
+    "pathsTitle": "Set paths",
+    "pathsHint": "Workspace folder is the root for opening projects. projects.json is shared with the VS Code / Cursor Project Manager extension — changes on either side are picked up automatically.",
+    "homePath": "Workspace folder",
+    "projectsJson": "projects.json file",
+    "browse": "Browse",
+    "next": "Next →",
+    "doneTitle": "Done",
+    "back": "← Back",
+    "finish": "Open Dock",
+    "folderMissing": "Folder <code>{path}</code> does not exist.",
+    "createFolder": "Create folder",
+    "folderFound": "Folder found",
+    "jsonMissing": "File <code>{path}</code> does not exist.",
+    "createFile": "Create file",
+    "jsonFound": "projects.json found",
+    "summaryHome": "Workspace folder:",
+    "summaryJson": "projects.json:",
+    "summaryHint": "Point Project Manager’s “Projects Location” at this file. Dock and the extension share the same projects.json.",
+    "homeRequired": "Enter a workspace folder",
+    "filePickerWindowsOnly": "File picker is only available on Windows — enter the path manually",
+    "pickProjectsJson": "Select projects.json"
+  },
+  "tray": {
+    "open": "Open",
+    "files": "Files",
+    "restart": "Restart",
+    "exit": "Exit",
+    "serverStartFailed": "Could not start the server:\n{error}",
+    "serverNotStarted": "Server did not start. Check Node.js / fnm.",
+    "restarting": "Stopping processes and restarting…",
+    "restartFailed": "Could not restart: {error}"
+  }
+}
