@@ -16,11 +16,10 @@
     "dashboard",
     "local",
     "projects",
-    "npm-scripts",
+    "management",
     "git",
     "terminal",
-    "tray",
-    "monorepo"
+    "tray"
   ],
   "homepage": "https://github.com/davidaganov/dock#readme",
   "bugs": {

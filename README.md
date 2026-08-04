@@ -1,11 +1,22 @@
+<div align="center">
+
+<img src="./assets/logo.png" alt="Dock" width="100" />
+
 # Dock
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+
+<img src="./assets/screenshot.png" alt="Dock screenshot" width="800" />
+
+</div>
 
 Local multi-project hub for developers. Run npm scripts, git commands, and a built-in terminal — with categories, filters, and a Windows system tray. No accounts, no cloud, zero runtime npm dependencies for the server itself.
 
-**A project is any folder on disk.**
+**A project is any folder on disk.** Git and `package.json` are optional.
+
+Built with plain Node.js + a small optional .NET tray on Windows.
 
 Repository: [github.com/davidaganov/dock](https://github.com/davidaganov/dock)
 
@@ -53,7 +64,7 @@ macOS / Linux are not personally tested yet. If something breaks, feedback is we
 
 1. Choose a **workspace folder** (e.g. `~/projects` or `D:\projects`)
 2. Point to **projects.json** (see below)
-3. Use Dock to add folders or create / clone projects into categories
+3. Add folders or create / clone projects into categories
 
 ## Project Manager + `projects.json`
 
@@ -68,18 +79,19 @@ Categories in Dock map to Project Manager groups (e.g. `01. Work`, `02. Personal
 
 ## Features
 
-- Category sidebar with drag-and-drop order
-- Table / card views, filters, custom project order
-- One-click npm / pnpm / yarn scripts
-- Integrated terminal with session tabs
-- Real-time logs over SSE
-- Create empty folder or `git clone` into a category
-- Hidden projects via the `__hidden__` tag
-- Shared list with IDE Project Manager via `projects.json`
+- **Shared project list** with IDE Project Manager via `projects.json` (watched live)
+- **Category sidebar** with drag-and-drop order and optional numeric prefixes (`01. …`)
+- **Table / card views**, filters, and custom project order
+- **One-click** npm / pnpm / yarn scripts
+- **Integrated terminal** with session tabs and real-time SSE logs
+- **Create** empty folders or **clone** repos into a category
+- **Windows system tray** for background server + quick open
+- **English / Russian** UI (tray follows the same locale)
+- **Hidden projects** via the `__hidden__` tag
 
 ## Configuration
 
-Local file `dock-config.json` stores paths, onboarding flag, and UI preferences.
+Local file `dock-config.json` (gitignored) stores paths, onboarding flag, and UI preferences.
 
 Example: [`dock-config.example.json`](dock-config.example.json)
 
@@ -120,6 +132,7 @@ dock/
 │   └── routes/
 ├── public/             # browser UI + locales
 ├── tray/               # Windows tray (.NET)
+├── assets/             # logo + screenshot for README
 ├── start-win.bat
 ├── start.sh
 └── dock-config.json    # local only (gitignored)
@@ -130,10 +143,10 @@ dock/
 ```bash
 npm install
 npm start
-npm run format          # Prettier
-npm run format:check
-npm run translate       # polyglot-keeper (needs POLYGLOT_API_KEY in .env)
-npm run tray:build      # rebuild Windows tray
+npm run format          # prettier
+npm run format:check    # prettier
+npm run translate       # polyglot-keeper
+npm run tray:build
 ```
 
 Copy [`.env.example`](.env.example) to `.env` for locale sync. Config: [`polyglot.config.json`](polyglot.config.json) (`en` is the source locale, files in `public/locales`).
