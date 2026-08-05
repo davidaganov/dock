@@ -1,4 +1,5 @@
 const { sendJson, readBody } = require("../core/http")
+const { suppressProjectsWatch } = require("../projects/projects-watch")
 const {
   isValidProjectId,
   loadProjects,
@@ -7,6 +8,8 @@ const {
   addProjectEntry,
   getProjectById,
   updateProjectById,
+  restoreProjectById,
+  hideProjectById,
   removeProjectById,
   validateLocalProjectDir,
   projectPath
@@ -63,6 +66,15 @@ const fs = require("fs")
 const { resolveExistingDir, defaultHomePath } = require("../core/paths")
 const { resolveCategoryDir, rememberCategoryDir } = require("../projects/category-dirs")
 const { stopProjectsWatch, startProjectsWatch } = require("../projects/projects-watch")
+const {
+  parseEnvFile,
+  writeEnvFile,
+  normalizeEntries,
+  setActiveVariant,
+  addVariant,
+  serializeEnvExport,
+  writeEnvExample
+} = require("../env/env-file")
 
 const log = (repo, message, type = "info", sessionId = null, i18nKey = null, i18nParams = null) => {
   const entry = {
@@ -92,10 +104,16 @@ const handleReposApi = async (req, res, pathname) => {
     const hiddenProjects = projects.filter((p) => !p.enabled)
 
     const detailedEnabled = await Promise.all(
-      enabledProjects.map((p) => getRepoDetails(p.id, { skipGit: true }))
+      enabledProjects.map(async (p) => {
+        const details = await getRepoDetails(p.id, { skipGit: true })
+        return details ? { ...details, enabled: p.enabled } : null
+      })
     )
     const detailedHidden = await Promise.all(
-      hiddenProjects.map((p) => getRepoDetails(p.id, { skipGit: true }))
+      hiddenProjects.map(async (p) => {
+        const details = await getRepoDetails(p.id, { skipGit: true })
+        return details ? { ...details, enabled: p.enabled } : null
+      })
     )
 
     const prefs = loadPreferences()
@@ -116,6 +134,7 @@ const handleReposApi = async (req, res, pathname) => {
       tagOrder: prefs.tagOrder,
       stripNumbersInJson: prefs.stripNumbersInJson,
       scriptOrder: prefs.scriptOrder,
+      favoriteScripts: prefs.favoriteScripts,
       listView: prefs.listView,
       listSort: prefs.listSort,
       listFilters: prefs.listFilters,
@@ -123,10 +142,14 @@ const handleReposApi = async (req, res, pathname) => {
       projectOrder: prefs.projectOrder,
       locale: prefs.locale,
       sidebarCollapsed: prefs.sidebarCollapsed,
+      sidebarWidth: prefs.sidebarWidth,
       detailCollapsed: prefs.detailCollapsed,
+      detailKeepClosed: prefs.detailKeepClosed,
+      detailWidth: prefs.detailWidth,
       activeTag: prefs.activeTag,
       terminalCollapsed: prefs.terminalCollapsed,
       tagIcons: prefs.tagIcons,
+      detailTab: prefs.detailTab,
       sessions: listAllSessions(),
       repos: detailedEnabled.filter(Boolean),
       hiddenRepos: detailedHidden.filter(Boolean)
@@ -327,7 +350,14 @@ const handleReposApi = async (req, res, pathname) => {
     }
     const prefs = loadPreferences()
     if (typeof body.sidebarCollapsed === "boolean") prefs.sidebarCollapsed = body.sidebarCollapsed
+    if (typeof body.sidebarWidth === "number" && body.sidebarWidth >= 120 && body.sidebarWidth <= 400) {
+      prefs.sidebarWidth = Math.round(body.sidebarWidth)
+    }
     if (typeof body.detailCollapsed === "boolean") prefs.detailCollapsed = body.detailCollapsed
+    if (typeof body.detailKeepClosed === "boolean") prefs.detailKeepClosed = body.detailKeepClosed
+    if (typeof body.detailWidth === "number" && body.detailWidth >= 320) {
+      prefs.detailWidth = Math.round(body.detailWidth)
+    }
     if (typeof body.activeTag === "string" || body.activeTag === null) {
       prefs.activeTag = body.activeTag
     }
@@ -359,6 +389,14 @@ const handleReposApi = async (req, res, pathname) => {
     }
     if (body.locale === "ru" || body.locale === "en") {
       prefs.locale = body.locale
+    }
+    if (body.detailTab && typeof body.detailTab === "object") {
+      prefs.detailTab = { ...prefs.detailTab }
+      for (const [id, tab] of Object.entries(body.detailTab)) {
+        if (!isValidProjectId(id)) continue
+        if (tab === "scripts" || tab === "env") prefs.detailTab[id] = tab
+        else delete prefs.detailTab[id]
+      }
     }
     savePreferences(prefs)
     return sendJson(res, 200, { ok: true, preferences: prefs })
@@ -715,6 +753,66 @@ const handleReposApi = async (req, res, pathname) => {
     return sendJson(res, 200, { scriptOrder: prefs.scriptOrder[projectId] || [] })
   }
 
+  const project = getProjectById(projectId)
+  const repoPath = project ? projectPath(project) : null
+
+  if (req.method === "GET" && sub === "/env") {
+    if (!project) return sendJson(res, 404, { error: "Project not found" })
+    if (!repoPath) return sendJson(res, 400, { error: "Project is not available locally" })
+    return sendJson(res, 200, parseEnvFile(repoPath))
+  }
+
+  if (req.method === "GET" && sub === "/env/export") {
+    if (!project) return sendJson(res, 404, { error: "Project not found" })
+    if (!repoPath) return sendJson(res, 400, { error: "Project is not available locally" })
+    const parsed = parseEnvFile(repoPath)
+    if (!parsed.exists) return sendJson(res, 404, { error: ".env not found" })
+    const url = new URL(req.url, "http://127.0.0.1")
+    const includeCommented =
+      url.searchParams.get("includeCommented") === "1" ||
+      url.searchParams.get("includeCommented") === "true"
+    const text = serializeEnvExport(parsed.entries, parsed.eol, { includeCommented })
+    return sendJson(res, 200, { text, eol: parsed.eol })
+  }
+
+  if (req.method === "PUT" && sub === "/env") {
+    if (!project) return sendJson(res, 404, { error: "Project not found" })
+    if (!repoPath) return sendJson(res, 400, { error: "Project is not available locally" })
+    let body = {}
+    try {
+      body = await readBody(req)
+    } catch {
+      return sendJson(res, 400, { error: "Invalid JSON" })
+    }
+    try {
+      const entries = normalizeEntries(body.entries || [])
+      const result = writeEnvFile(repoPath, entries)
+      log(projectId, "Updated .env", "success")
+      return sendJson(res, 200, result)
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message })
+    }
+  }
+
+  if (req.method === "PUT" && sub === "/favorite-scripts") {
+    if (!project) return sendJson(res, 404, { error: "Project not found" })
+    let body = {}
+    try {
+      body = await readBody(req)
+    } catch {
+      return sendJson(res, 400, { error: "Invalid JSON" })
+    }
+    const scripts = Array.isArray(body.scripts)
+      ? body.scripts.filter((s) => typeof s === "string")
+      : null
+    if (!scripts) return sendJson(res, 400, { error: "scripts required" })
+    const prefs = loadPreferences()
+    if (scripts.length) prefs.favoriteScripts[projectId] = [...new Set(scripts)]
+    else delete prefs.favoriteScripts[projectId]
+    savePreferences(prefs)
+    return sendJson(res, 200, { favoriteScripts: prefs.favoriteScripts[projectId] || [] })
+  }
+
   if (req.method === "POST") {
     let body = {}
     try {
@@ -731,6 +829,42 @@ const handleReposApi = async (req, res, pathname) => {
     }
 
     try {
+      if (sub === "/env/variant") {
+        const { key, variantIndex } = body
+        if (!key || typeof key !== "string") {
+          return sendJson(res, 400, { error: "key required" })
+        }
+        const parsed = parseEnvFile(repoPath)
+        const entries = setActiveVariant(parsed.entries, key, variantIndex)
+        const result = writeEnvFile(repoPath, entries)
+        log(projectId, `ENV ${key} → variant ${variantIndex}`, "success")
+        return sendJson(res, 200, result)
+      }
+
+      if (sub === "/env/variants") {
+        const { key, value } = body
+        if (!key || typeof key !== "string") {
+          return sendJson(res, 400, { error: "key required" })
+        }
+        if (typeof value !== "string") {
+          return sendJson(res, 400, { error: "value required" })
+        }
+        const parsed = parseEnvFile(repoPath)
+        const entries = addVariant(parsed.entries, key, value)
+        const result = writeEnvFile(repoPath, entries)
+        log(projectId, `ENV ${key} variant added`, "success")
+        return sendJson(res, 200, result)
+      }
+
+      if (sub === "/env/example") {
+        const parsed = parseEnvFile(repoPath)
+        if (!parsed.exists) return sendJson(res, 404, { error: ".env not found" })
+        const includeCommented = !!body.includeCommented
+        const result = writeEnvExample(repoPath, parsed.entries, { includeCommented })
+        log(projectId, "Generated .env.example", "success")
+        return sendJson(res, 200, { ok: true, path: result.path })
+      }
+
       if (sub === "/checkout") {
         const { branch } = body
         if (!branch) return sendJson(res, 400, { error: "branch required" })
@@ -802,13 +936,15 @@ const handleReposApi = async (req, res, pathname) => {
       }
 
       if (sub === "/hide") {
-        const updated = updateProjectById(projectId, { enabled: false })
+        const updated = hideProjectById(projectId)
+        suppressProjectsWatch(3000)
         broadcast("repo-update", { name: projectId })
         return sendJson(res, 200, { project: updated })
       }
 
       if (sub === "/show") {
-        const updated = updateProjectById(projectId, { enabled: true })
+        const updated = restoreProjectById(projectId)
+        suppressProjectsWatch(3000)
         broadcast("repo-update", { name: projectId })
         return sendJson(res, 200, { project: updated })
       }

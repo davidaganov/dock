@@ -189,6 +189,7 @@ const getProjectMeta = (localPath) => {
     return {
       hasPackageJson: false,
       hasGit: false,
+      hasEnv: false,
       scripts: [],
       packageManager: null
     }
@@ -196,10 +197,12 @@ const getProjectMeta = (localPath) => {
 
   const parsed = readPkgJson(localPath)
   const hasGit = fs.existsSync(path.join(localPath, ".git"))
+  const hasEnv = fs.existsSync(path.join(localPath, ".env"))
 
   return {
     hasPackageJson: Boolean(parsed),
     hasGit,
+    hasEnv,
     scripts: parsed?.pkg?.scripts ? Object.keys(parsed.pkg.scripts) : [],
     packageManager: parsed ? detectPackageManager(localPath) : null
   }

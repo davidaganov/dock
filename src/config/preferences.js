@@ -7,7 +7,10 @@ const defaultPreferences = () => {
     defaultScripts: {},
     scriptOrder: {},
     sidebarCollapsed: false,
+    sidebarWidth: 200,
     detailCollapsed: false,
+    detailKeepClosed: false,
+    detailWidth: 420,
     activeTag: null,
     terminalCollapsed: false,
     tagIcons: {},
@@ -19,7 +22,8 @@ const defaultPreferences = () => {
     recentProjects: {},
     projectOrder: {},
     categoryDirs: {},
-    locale: "en"
+    locale: "en",
+    detailTab: {}
   }
 }
 
@@ -63,8 +67,17 @@ const normalizePreferences = (raw) => {
   if (typeof raw.sidebarCollapsed === "boolean") {
     prefs.sidebarCollapsed = raw.sidebarCollapsed
   }
+  if (typeof raw.sidebarWidth === "number" && raw.sidebarWidth >= 120 && raw.sidebarWidth <= 400) {
+    prefs.sidebarWidth = Math.round(raw.sidebarWidth)
+  }
   if (typeof raw.detailCollapsed === "boolean") {
     prefs.detailCollapsed = raw.detailCollapsed
+  }
+  if (typeof raw.detailKeepClosed === "boolean") {
+    prefs.detailKeepClosed = raw.detailKeepClosed
+  }
+  if (typeof raw.detailWidth === "number" && raw.detailWidth >= 320) {
+    prefs.detailWidth = Math.round(raw.detailWidth)
   }
   if (typeof raw.activeTag === "string" || raw.activeTag === null) {
     prefs.activeTag = raw.activeTag
@@ -121,6 +134,12 @@ const normalizePreferences = (raw) => {
       prefs.recentProjects[id] = ts
     }
   }
+  if (raw.detailTab && typeof raw.detailTab === "object") {
+    for (const [id, tab] of Object.entries(raw.detailTab)) {
+      if (!isValidProjectId(id)) continue
+      if (tab === "scripts" || tab === "env") prefs.detailTab[id] = tab
+    }
+  }
 
   return prefs
 }
@@ -140,7 +159,10 @@ const savePreferences = (prefs) => {
     defaultScripts: prefs.defaultScripts,
     scriptOrder: prefs.scriptOrder,
     sidebarCollapsed: prefs.sidebarCollapsed,
+    sidebarWidth: prefs.sidebarWidth,
     detailCollapsed: prefs.detailCollapsed,
+    detailKeepClosed: prefs.detailKeepClosed,
+    detailWidth: prefs.detailWidth,
     activeTag: prefs.activeTag,
     terminalCollapsed: prefs.terminalCollapsed,
     tagIcons: prefs.tagIcons,
@@ -152,7 +174,8 @@ const savePreferences = (prefs) => {
     recentProjects: prefs.recentProjects,
     projectOrder: prefs.projectOrder,
     categoryDirs: prefs.categoryDirs,
-    locale: prefs.locale
+    locale: prefs.locale,
+    detailTab: prefs.detailTab
   })
   writeDockFile(next)
 }
@@ -178,6 +201,12 @@ const prunePreferences = (prefs, existingIds) => {
       changed = true
     }
   }
+  for (const id of Object.keys(prefs.detailTab)) {
+    if (!idSet.has(id)) {
+      delete prefs.detailTab[id]
+      changed = true
+    }
+  }
   return changed
 }
 
@@ -185,6 +214,7 @@ const cleanupProjectPreferences = (prefs, projectId) => {
   delete prefs.favoriteScripts[projectId]
   delete prefs.defaultScripts[projectId]
   delete prefs.scriptOrder[projectId]
+  delete prefs.detailTab[projectId]
 }
 
 const remapTagIconKey = (prefs, oldTag, newTag) => {

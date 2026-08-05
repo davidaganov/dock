@@ -38,7 +38,8 @@
     "hideDetail": "Скрыть панель проекта",
     "changes": "Изменения",
     "clearFilters": "Сбросить фильтры",
-    "dragProject": "Перетащите для сортировки"
+    "dragProject": "Перетащите для сортировки",
+    "actions": "Действия"
   },
   "sort": {
     "name": "По имени",
@@ -52,7 +53,23 @@
     "actions": "Действия",
     "branchSearch": "Поиск ветки…",
     "noBranches": "Нет веток",
-    "startDevHint": "Запустите dev-сервер"
+    "startDevHint": "Запустите сервер",
+    "tabs": {
+      "scripts": "Скрипты",
+      "env": "ENV"
+    },
+    "missing": {
+      "title": "Папка не найдена",
+      "body": "Проект есть в projects.json, но папки на диске больше нет.",
+      "short": "Не найден",
+      "remove": "Удалить из списка",
+      "removeConfirm": "Удалить «{name}» из projects.json?"
+    },
+    "remote": {
+      "title": "Удалённый проект",
+      "body": "Проект открывается через VS Code Remote. Локальные скрипты и .env недоступны.",
+      "short": "Remote"
+    }
   },
   "open": {
     "openApp": "Открыть",
@@ -68,7 +85,49 @@
     "play": "Запустить",
     "restartNamed": "Перезапустить {name}",
     "playNamed": "Запустить {name}",
-    "drag": "Перетащите"
+    "drag": "Перетащите",
+    "favorite": "В избранное",
+    "unfavorite": "Убрать из избранного",
+    "favoriteError": "Не удалось обновить избранное"
+  },
+  "env": {
+    "empty": "Файл .env не найден",
+    "create": "Создать .env",
+    "noVariables": "Переменных пока нет",
+    "addVariable": "Добавить переменную",
+    "addVariant": "Добавить вариант",
+    "keyPlaceholder": "KEY",
+    "valuePlaceholder": "value",
+    "variantPrompt": "Значение нового варианта:",
+    "selectVariant": "Выбрать вариант",
+    "copyActive": "Скопировать ENV",
+    "copySuccess": "ENV скопирован в буфер обмена",
+    "generateExample": "Сгенерировать .env.example",
+    "exampleSuccess": "Файл {path} создан",
+    "includeCommented": "Включать закомментированные варианты",
+    "copyError": "Не удалось скопировать ENV",
+    "exampleError": "Не удалось создать .env.example",
+    "restart": {
+      "title": "ENV изменён",
+      "action": "Перезапустить",
+      "dismiss": "Позже"
+    },
+    "saveError": "Не удалось сохранить .env"
+  },
+  "toast": {
+    "projectHidden": "«{name}» скрыт",
+    "projectHideError": "Не удалось скрыть «{name}»",
+    "projectRestored": "«{name}» возвращён",
+    "projectRestoreError": "Не удалось вернуть «{name}»",
+    "projectMoved": "«{name}» перемещён в {category}",
+    "projectDeleted": "«{name}» удалён из списка",
+    "projectCreated": "Проект «{name}» создан",
+    "folderOpened": "Папка открыта в проводнике",
+    "ideOpened": "Проект открыт в IDE",
+    "githubOpened": "GitHub открыт в браузере",
+    "scriptFinished": "{name} завершён ({project})",
+    "scriptStopped": "{name} остановлен ({project})",
+    "scriptFailed": "{name} завершился с кодом {code} ({project})"
   },
   "status": {
     "running": "Запущен процесс",

@@ -44,15 +44,16 @@ const normalizeProjectEntry = (raw) => {
 }
 
 const entryToJson = (entry) => {
-  return {
+  const json = {
     id: entry.id,
     name: entry.name,
     rootPath: entry.rootPath,
     paths: entry.paths || [],
     tags: entry.tags || [],
-    enabled: entry.enabled !== false,
     profile: entry.profile || ""
   }
+  if (entry.enabled === false) json.enabled = false
+  return json
 }
 
 const saveProjectsJson = (entries) => {
@@ -82,11 +83,59 @@ const saveProjectsJson = (entries) => {
 
 const loadProjects = () => {
   try {
-    return loadProjectsRaw().map(normalizeProjectEntry).filter(Boolean)
+    const entries = loadProjectsRaw().map(normalizeProjectEntry).filter(Boolean)
+    const byId = new Map()
+    for (const entry of entries) {
+      const prev = byId.get(entry.id)
+      if (!prev || (prev.enabled === false && entry.enabled !== false)) {
+        byId.set(entry.id, entry)
+      }
+    }
+    return [...byId.values()]
   } catch {
     return []
   }
 }
+
+const normalizeRootPath = (rootPath) => {
+  return path.resolve(String(rootPath || "")).replace(/\\/g, "/").toLowerCase()
+}
+
+const setProjectEnabledInJson = (id, enabled) => {
+  const raw = loadProjectsRaw()
+  let found = false
+  let matchPath = ""
+  for (const entry of raw) {
+    if (entry?.id === id) {
+      found = true
+      matchPath = normalizeRootPath(entry.rootPath)
+      break
+    }
+  }
+  if (!found) throw new Error("Project not found")
+
+  const nextRaw = raw.map((entry) => {
+    if (!entry || typeof entry !== "object") return entry
+    const sameId = entry.id === id
+    const samePath = matchPath && normalizeRootPath(entry.rootPath) === matchPath
+    if (!sameId && !samePath) return entry
+    const copy = { ...entry }
+    if (enabled) delete copy.enabled
+    else copy.enabled = false
+    return copy
+  })
+
+  const normalized = nextRaw.map(normalizeProjectEntry).filter(Boolean)
+  saveProjectsJson(normalized)
+  return (
+    normalized.find((project) => project.id === id) ||
+    normalized.find((project) => normalizeRootPath(project.rootPath) === matchPath)
+  )
+}
+
+const restoreProjectById = (id) => setProjectEnabledInJson(id, true)
+
+const hideProjectById = (id) => setProjectEnabledInJson(id, false)
 
 const getProjectById = (id) => {
   if (!isValidProjectId(id)) return null
@@ -95,18 +144,19 @@ const getProjectById = (id) => {
 
 const updateProjectById = (id, patch) => {
   const projects = loadProjects()
-  const index = projects.findIndex((p) => p.id === id)
-  if (index < 0) throw new Error("Project not found")
-
-  const current = projects[index]
-  const next = {
-    ...current,
-    ...patch,
-    id: current.id
-  }
-  projects[index] = next
-  saveProjectsJson(projects)
-  return next
+  let found = false
+  const nextProjects = projects.map((project) => {
+    if (project.id !== id) return project
+    found = true
+    return {
+      ...project,
+      ...patch,
+      id: project.id
+    }
+  })
+  if (!found) throw new Error("Project not found")
+  saveProjectsJson(nextProjects)
+  return nextProjects.find((project) => project.id === id)
 }
 
 const removeProjectById = (id) => {
@@ -228,6 +278,8 @@ module.exports = {
   newProjectId,
   loadProjects,
   getProjectById,
+  restoreProjectById,
+  hideProjectById,
   updateProjectById,
   removeProjectById,
   addProjectEntry,

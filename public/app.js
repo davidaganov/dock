@@ -29,7 +29,19 @@ let showHiddenOnly = false
 let selectedRepoId = null
 let searchQuery = ""
 let sidebarCollapsed = false
+let sidebarWidth = 200
+const DEFAULT_SIDEBAR_WIDTH = 200
+const MIN_SIDEBAR_WIDTH = 160
+const SIDEBAR_COLLAPSED_W = 44
+const SIDEBAR_COLLAPSE_OVERSHOOT = 60
+const SIDEBAR_EXPAND_THRESHOLD = 120
+const MAX_SIDEBAR_WIDTH = 320
 let detailCollapsed = false
+let detailKeepClosed = false
+let detailWidth = 420
+const DEFAULT_DETAIL_WIDTH = 420
+const MIN_DETAIL_WIDTH = Math.round(DEFAULT_DETAIL_WIDTH * 0.9)
+const DETAIL_CLOSE_OVERSHOOT = 80
 let terminalCollapsed = false
 let terminalMaximized = false
 let terminalBodyHeight = Number(localStorage.getItem("dock-term-body-h")) || 180
@@ -37,6 +49,20 @@ let gitHydrating = false
 let gitHydrateToken = 0
 let tagIcons = {}
 let stripNumbersInJson = false
+let detailTabPrefs = {}
+let favoriteScripts = {}
+/** @type {Map<string, object>} */
+const envDataCache = new Map()
+/** @type {Set<string>} */
+const envRestartPending = new Set()
+let detailPanelBound = false
+let envIncludeCommented = localStorage.getItem("dock-env-include-commented") === "1"
+let detailPrefsHydrated = false
+let projectsReloadTimer = null
+/** @type {Set<string>} */
+const pendingShownIds = new Set()
+/** @type {Set<string>} */
+const pendingHiddenIds = new Set()
 
 /** @type {Map<string, object>} */
 const sessionState = new Map()
@@ -58,6 +84,30 @@ function escapeHtml(str) {
 
 function jsStr(str) {
   return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'")
+}
+
+function showToast(message, { type = "success", duration = 2800 } = {}) {
+  const stack = document.getElementById("toast-stack")
+  if (!stack) return
+  const el = document.createElement("div")
+  el.className = `toast toast-${type}`
+  el.textContent = message
+  stack.appendChild(el)
+  setTimeout(() => {
+    el.classList.add("toast-out")
+    setTimeout(() => el.remove(), 200)
+  }, duration)
+}
+
+function flashActionButton(btn) {
+  if (!btn) return
+  btn.classList.add("btn-action-done")
+  setTimeout(() => btn.classList.remove("btn-action-done"), 1500)
+}
+
+function envIncludeCommentedChecked() {
+  const cb = detailContent.querySelector(".env-include-commented-cb")
+  return cb ? cb.checked : envIncludeCommented
 }
 
 function isDevScript(name) {
@@ -96,6 +146,64 @@ function orderedScriptsForRepo(repo) {
 function primaryRunScript(repo) {
   const { run } = normalizeScriptOrder(repo)
   return run[0] || null
+}
+
+function getRepoFavorites(repo) {
+  return (favoriteScripts[repo.id] || []).filter((s) => (repo.scripts || []).includes(s))
+}
+
+function repoHasScripts(repo) {
+  return (repo.scripts || []).length > 0
+}
+
+function repoHasEnv(repo) {
+  if (!repo.isLocal || repo.isMissing || repo.isRemote) return false
+  const cached = envDataCache.get(repo.id)
+  if (cached) return cached.exists
+  return !!repo.hasEnv
+}
+
+function getAvailableDetailTabs(repo) {
+  const tabs = []
+  if (repoHasScripts(repo)) tabs.push("scripts")
+  if (repoHasEnv(repo)) tabs.push("env")
+  return tabs
+}
+
+function projectAvailabilityClass(repo) {
+  if (repo.isMissing) return "is-missing"
+  if (repo.isRemote) return "is-remote"
+  return ""
+}
+
+async function removeMissingProject(id) {
+  const repo = repos.get(id)
+  if (!repo?.isMissing) return
+  if (!confirm(t("detail.missing.removeConfirm", { name: repo.name }))) return
+  await api(`/api/repos/${encodeURIComponent(id)}`, { method: "DELETE" })
+  if (selectedRepoId === id) selectedRepoId = null
+  await loadRepos()
+  showToast(t("toast.projectDeleted", { name: repo.name }))
+}
+
+function isScriptFavorite(repoId, script) {
+  return (favoriteScripts[repoId] || []).includes(script)
+}
+
+async function toggleFavoriteScript(repoId, script) {
+  const repo = repos.get(repoId)
+  if (!repo) return
+  const current = new Set(favoriteScripts[repoId] || [])
+  if (current.has(script)) current.delete(script)
+  else current.add(script)
+  const scripts = [...current]
+  const data = await api(`/api/repos/${encodeURIComponent(repoId)}/favorite-scripts`, {
+    method: "PUT",
+    body: JSON.stringify({ scripts })
+  })
+  favoriteScripts = { ...favoriteScripts, [repoId]: data.favoriteScripts || scripts }
+  renderProjectList()
+  if (selectedRepoId === repoId) renderDetail()
 }
 
 function primaryTagOf(repo) {
@@ -554,6 +662,7 @@ function openCategoryMenu(tag, anchor) {
 }
 
 async function moveProjectToCategory(id, tag) {
+  const repo = repos.get(id)
   const data = await api(`/api/repos/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify({ tag })
@@ -564,6 +673,11 @@ async function moveProjectToCategory(id, tag) {
   }
   renderProjectList()
   if (selectedRepoId === id) renderDetail()
+  const categoryLabel =
+    !tag || tag === UNCATEGORIZED_KEY
+      ? t("sidebar.uncategorized")
+      : parseTagDisplay(tag).label || tag
+  showToast(t("toast.projectMoved", { name: repo?.name || id, category: categoryLabel }))
 }
 
 function openProjectMenu(id, anchor) {
@@ -697,8 +811,10 @@ function renderProjectList() {
   }
 
   const panel = document.querySelector(".project-list-panel")
+  const tableWrap = document.getElementById("project-table-wrap")
   const listHeader = document.querySelector(".list-header")
   panel?.classList.toggle("cards-view", listView === "cards")
+  tableWrap?.classList.toggle("cards-view", listView === "cards")
   listHeader?.classList.toggle("hidden", listView === "cards")
 
   const sortLabelEl = document.getElementById("list-sort-label")
@@ -736,7 +852,13 @@ function renderProjectList() {
 
   projectList.querySelectorAll("[data-id]").forEach((row) => {
     row.addEventListener("click", (e) => {
-      if (e.target.closest(".project-card-actions") || e.target.closest(".project-drag")) return
+      if (
+        e.target.closest(".project-card-actions") ||
+        e.target.closest(".project-card-favorites") ||
+        e.target.closest(".col-actions") ||
+        e.target.closest(".project-drag")
+      )
+        return
       selectRepo(row.dataset.id)
     })
   })
@@ -759,11 +881,18 @@ function renderProjectList() {
       restartScript(btn.dataset.repo, btn.dataset.script)
     })
   })
+  projectList.querySelectorAll(".card-fav-chip").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      runScript(btn.dataset.repo, btn.dataset.script)
+    })
+  })
   bindProjectListDnD()
 }
 
 function renderProjectRow(repo) {
   const selected = repo.id === selectedRepoId ? "selected" : ""
+  const avail = projectAvailabilityClass(repo)
   const { statusClass, statusTitle } = statusMeta(repo)
   const branch =
     gitHydrating && repo.hasGit && !repo.branch ? "…" : repo.branch || (repo.hasGit ? "—" : "—")
@@ -771,45 +900,86 @@ function renderProjectRow(repo) {
     repo.isDirty && repo.dirtyCount
       ? `<span class="branch-dirty" title="${escapeHtml(t("list.changes"))}">${repo.dirtyCount}</span>`
       : ""
-  return `<div class="project-row ${selected}" data-id="${escapeHtml(repo.id)}">
+  const pathLabel = repo.isRemote
+    ? `<span class="project-path project-path-remote"><i class="mdi mdi-cloud-outline"></i> ${escapeHtml(repo.rootPath)}</span>`
+    : repo.isMissing
+      ? `<span class="project-path project-path-missing"><i class="mdi mdi-folder-off-outline"></i> ${escapeHtml(repo.rootPath)}</span>`
+      : `<div class="project-path">${escapeHtml(repo.path || repo.rootPath || "")}</div>`
+  const branchCell =
+    repo.isMissing || repo.isRemote
+      ? `<span class="branch-meta-label">${escapeHtml(repo.isRemote ? t("detail.remote.short") : t("detail.missing.short"))}</span>`
+      : `<i class="mdi mdi-source-branch branch-icon"></i><span class="branch-text">${escapeHtml(branch)}</span>${dirtyBadge}`
+  const favs = getRepoFavorites(repo)
+  const favHtml = favs.length
+    ? `<div class="row-fav-chips">${favs
+        .map(
+          (s) =>
+            `<button type="button" class="card-fav-chip" data-repo="${escapeHtml(repo.id)}" data-script="${escapeHtml(s)}" title="${escapeHtml(t("scripts.playNamed", { name: s }))}">${escapeHtml(s)}</button>`
+        )
+        .join("")}</div>`
+    : ""
+  return `<div class="project-row ${selected} ${avail}" data-id="${escapeHtml(repo.id)}">
     <div class="col-name">
       <div class="project-name-row">
         <span class="project-drag" draggable="true" title="${escapeHtml(t("list.dragProject"))}"><i class="mdi mdi-drag-vertical"></i></span>
         <span class="status-dot ${statusClass}" title="${escapeHtml(statusTitle)}"></span>
         <span class="project-name">${escapeHtml(repo.name)}</span>
       </div>
-      <div class="project-path">${escapeHtml(repo.path || repo.rootPath || "")}</div>
+      ${pathLabel}
     </div>
-    <div class="branch-cell">
-      <i class="mdi mdi-source-branch branch-icon"></i>
-      <span class="branch-text">${escapeHtml(branch)}</span>${dirtyBadge}
+    <div class="branch-cell">${branchCell}</div>
+    <div class="col-actions">
+      ${renderCardScriptActions(repo, "row-actions")}
+      ${favHtml}
     </div>
   </div>`
 }
 
-function renderCardScriptActions(repo) {
+function renderCardScriptActions(repo, extraClass = "") {
   const script = primaryRunScript(repo)
-  if (!script) return ""
+  if (!script || repo.isMissing) return ""
   const running = isScriptRunning(repo.id, script)
+  const cls = extraClass ? ` ${extraClass}` : ""
   if (running) {
-    return `<div class="project-card-actions">
+    return `<div class="project-card-actions${cls}">
       <button type="button" class="card-script-btn card-script-restart" data-repo="${escapeHtml(repo.id)}" data-script="${escapeHtml(script)}" title="${escapeHtml(t("scripts.restartNamed", { name: script }))}"><i class="mdi mdi-restart"></i></button>
       <button type="button" class="card-script-btn card-script-pause" data-repo="${escapeHtml(repo.id)}" data-script="${escapeHtml(script)}" title="${escapeHtml(t("scripts.stop"))}"><i class="mdi mdi-pause"></i></button>
     </div>`
   }
-  return `<div class="project-card-actions">
+  return `<div class="project-card-actions${cls}">
     <button type="button" class="card-script-btn card-script-play" data-repo="${escapeHtml(repo.id)}" data-script="${escapeHtml(script)}" title="${escapeHtml(t("scripts.playNamed", { name: script }))}"><i class="mdi mdi-play"></i></button>
   </div>`
 }
 
+function renderCardFavorites(repo) {
+  const favs = getRepoFavorites(repo)
+  if (!favs.length) return ""
+  return `<div class="project-card-favorites">${favs
+    .map(
+      (s) =>
+        `<button type="button" class="card-fav-chip" data-repo="${escapeHtml(repo.id)}" data-script="${escapeHtml(s)}" title="${escapeHtml(t("scripts.playNamed", { name: s }))}">${escapeHtml(s)}</button>`
+    )
+    .join("")}</div>`
+}
+
 function renderProjectCard(repo) {
   const selected = repo.id === selectedRepoId ? "selected" : ""
+  const avail = projectAvailabilityClass(repo)
   const { statusClass, statusTitle } = statusMeta(repo)
   const branch =
     gitHydrating && repo.hasGit && !repo.branch ? "…" : repo.branch || (repo.hasGit ? "—" : "—")
   const script = primaryRunScript(repo)
-  const scriptHint = script ? `<span class="project-card-script">${escapeHtml(script)}</span>` : ""
-  return `<div class="project-card ${selected}" data-id="${escapeHtml(repo.id)}">
+  const scriptHint = script && !repo.isMissing && !repo.isRemote ? `<span class="project-card-script">${escapeHtml(script)}</span>` : ""
+  const branchRow =
+    repo.isMissing || repo.isRemote
+      ? `<div class="project-card-branch project-card-meta"><i class="mdi ${repo.isRemote ? "mdi-cloud-outline" : "mdi-folder-off-outline"}"></i> ${escapeHtml(repo.isRemote ? t("detail.remote.short") : t("detail.missing.short"))}</div>`
+      : `<div class="project-card-branch"><i class="mdi mdi-source-branch"></i> ${escapeHtml(branch)}${scriptHint}</div>`
+  const pathHtml = repo.isRemote
+    ? `<div class="project-path project-path-remote">${escapeHtml(repo.rootPath)}</div>`
+    : repo.isMissing
+      ? `<div class="project-path project-path-missing">${escapeHtml(repo.rootPath)}</div>`
+      : `<div class="project-path">${escapeHtml(repo.path || repo.rootPath || "")}</div>`
+  return `<div class="project-card ${selected} ${avail}" data-id="${escapeHtml(repo.id)}">
     <div class="project-card-head">
       <span class="project-drag" draggable="true" title="${escapeHtml(t("list.dragProject"))}"><i class="mdi mdi-drag-vertical"></i></span>
       <div class="project-card-main">
@@ -817,11 +987,12 @@ function renderProjectCard(repo) {
           <span class="status-dot ${statusClass}" title="${escapeHtml(statusTitle)}"></span>
           <span class="project-name">${escapeHtml(repo.name)}</span>
         </div>
-        <div class="project-path">${escapeHtml(repo.path || repo.rootPath || "")}</div>
-        <div class="project-card-branch"><i class="mdi mdi-source-branch"></i> ${escapeHtml(branch)}${scriptHint}</div>
+        ${pathHtml}
+        ${branchRow}
       </div>
       ${renderCardScriptActions(repo)}
     </div>
+    ${renderCardFavorites(repo)}
   </div>`
 }
 
@@ -874,6 +1045,9 @@ function renderScriptRow(repo, script, group) {
   const id = jsStr(repo.id)
   const s = jsStr(script)
   const running = isScriptRunning(repo.id, script)
+  const isFav = isScriptFavorite(repo.id, script)
+  const favIcon = isFav ? "mdi-star" : "mdi-star-outline"
+  const favTitle = isFav ? t("scripts.unfavorite") : t("scripts.favorite")
 
   const actions = running
     ? `<button type="button" class="script-action script-restart" onclick="restartScript('${id}', '${s}')" title="${escapeHtml(t("scripts.restart"))}"><i class="mdi mdi-restart"></i></button>
@@ -886,6 +1060,7 @@ function renderScriptRow(repo, script, group) {
       <span class="script-name">${escapeHtml(script)}</span>
       <span class="script-cmd">${escapeHtml(pmRunLabel(repo, script))}</span>
     </div>
+    <button type="button" class="script-fav ${isFav ? "is-fav" : ""}" data-repo="${escapeHtml(repo.id)}" data-script="${escapeHtml(script)}" title="${escapeHtml(favTitle)}"><i class="mdi ${favIcon}"></i></button>
     <div class="script-actions">${actions}</div>
   </div>`
 }
@@ -977,6 +1152,385 @@ function renderScripts(repo) {
   return html
 }
 
+function getActiveDetailTab(repoId) {
+  return detailTabPrefs[repoId] === "env" ? "env" : "scripts"
+}
+
+async function setActiveDetailTab(repoId, tab) {
+  detailTabPrefs = { ...detailTabPrefs, [repoId]: tab }
+  await api("/api/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ detailTab: detailTabPrefs })
+  }).catch(() => {})
+}
+
+function getAliveSessionsForRepo(repoId) {
+  return [...sessionState.values()].filter((s) => s.repo === repoId && s.alive)
+}
+
+function renderEnvRestartBanner(repoId) {
+  if (!envRestartPending.has(repoId)) return ""
+  const alive = getAliveSessionsForRepo(repoId)
+  if (!alive.length) {
+    envRestartPending.delete(repoId)
+    return ""
+  }
+  return `<div class="env-restart-banner" data-repo-id="${escapeHtml(repoId)}">
+    <span class="env-restart-text"><i class="mdi mdi-alert-outline"></i> ${escapeHtml(t("env.restart.title"))}</span>
+    <div class="env-restart-actions">
+      <button type="button" class="btn btn-sm btn-primary env-restart-btn" data-repo="${escapeHtml(repoId)}">${escapeHtml(t("env.restart.action"))}</button>
+      <button type="button" class="btn btn-sm env-restart-dismiss" data-repo="${escapeHtml(repoId)}">${escapeHtml(t("env.restart.dismiss"))}</button>
+    </div>
+  </div>`
+}
+
+function renderEnvEmpty(repoId) {
+  return `<div class="env-panel env-empty-state">
+    <p>${escapeHtml(t("env.empty"))}</p>
+    <button type="button" class="btn btn-primary env-create-btn" data-repo="${escapeHtml(repoId)}">${escapeHtml(t("env.create"))}</button>
+  </div>`
+}
+
+function renderEnvVarGroup(entry) {
+  const key = entry.key
+  const variants = entry.variants || []
+  const multi = variants.length > 1
+
+  const variantsHtml = variants
+    .map((v, i) => {
+      const activeClass = v.active ? "active" : "dimmed"
+      const radio = multi
+        ? `<button type="button" class="env-variant-radio ${v.active ? "is-active" : ""}" data-key="${escapeHtml(key)}" data-index="${i}" title="${escapeHtml(t("env.selectVariant"))}"><i class="mdi ${v.active ? "mdi-radiobox-marked" : "mdi-radiobox-blank"}"></i></button>`
+        : ""
+      return `<div class="env-variant ${activeClass}" data-key="${escapeHtml(key)}" data-index="${i}">
+      ${radio}
+      <input type="text" class="env-value-input" data-key="${escapeHtml(key)}" data-index="${i}" value="${escapeHtml(v.value)}" spellcheck="false" />
+    </div>`
+    })
+    .join("")
+
+  const addVariantBtn = `<button type="button" class="env-add-variant btn btn-sm" data-key="${escapeHtml(key)}"><i class="mdi mdi-plus"></i> ${escapeHtml(t("env.addVariant"))}</button>`
+
+  if (multi) {
+    return `<div class="env-var-group" data-key="${escapeHtml(key)}">
+      <div class="env-var-key">${escapeHtml(key)}</div>
+      <div class="env-variants">${variantsHtml}</div>
+      ${addVariantBtn}
+    </div>`
+  }
+
+  return `<div class="env-var-group env-var-single" data-key="${escapeHtml(key)}">
+    <label class="env-var-key-label">${escapeHtml(key)}</label>
+    <input type="text" class="env-value-input env-single-value" data-key="${escapeHtml(key)}" data-index="0" value="${escapeHtml(variants[0]?.value || "")}" spellcheck="false" />
+    ${addVariantBtn}
+  </div>`
+}
+
+function renderEnvEditor(repoId, data) {
+  const vars = (data.entries || []).filter((e) => e.type === "var")
+  const varsHtml = vars.length
+    ? vars.map((e) => renderEnvVarGroup(e)).join("")
+    : `<p class="env-no-vars">${escapeHtml(t("env.noVariables"))}</p>`
+
+  return `<div class="env-panel" data-repo-id="${escapeHtml(repoId)}">
+    ${renderEnvRestartBanner(repoId)}
+    <div class="env-toolbar">
+      <div class="env-toolbar-actions">
+        <button type="button" class="btn btn-sm env-copy-btn" data-repo="${escapeHtml(repoId)}"><i class="mdi mdi-content-copy"></i> ${escapeHtml(t("env.copyActive"))}</button>
+        <button type="button" class="btn btn-sm env-example-btn" data-repo="${escapeHtml(repoId)}"><i class="mdi mdi-file-document-outline"></i> ${escapeHtml(t("env.generateExample"))}</button>
+      </div>
+      <label class="env-toolbar-option">
+        <input type="checkbox" class="env-include-commented-cb" ${envIncludeCommented ? "checked" : ""} />
+        <span>${escapeHtml(t("env.includeCommented"))}</span>
+      </label>
+    </div>
+    <div class="env-editor-list">${varsHtml}</div>
+    <div class="env-add-variable">
+      <input type="text" class="env-new-key" placeholder="${escapeHtml(t("env.keyPlaceholder"))}" spellcheck="false" />
+      <input type="text" class="env-new-value" placeholder="${escapeHtml(t("env.valuePlaceholder"))}" spellcheck="false" />
+      <button type="button" class="btn btn-sm btn-primary env-add-variable-btn"><i class="mdi mdi-plus"></i> ${escapeHtml(t("env.addVariable"))}</button>
+    </div>
+  </div>`
+}
+
+function renderEnvPanel(repo) {
+  const cached = envDataCache.get(repo.id)
+  if (!cached) {
+    return `<div class="env-panel env-loading"><p>${escapeHtml(t("list.loading"))}</p></div>`
+  }
+  if (!cached.exists) return renderEnvEmpty(repo.id)
+  return renderEnvEditor(repo.id, cached)
+}
+
+function renderDetailStatusBanner(repo) {
+  if (repo.isMissing) {
+    return `<div class="detail-status-banner detail-missing">
+      <div class="detail-status-icon"><i class="mdi mdi-folder-off-outline"></i></div>
+      <div class="detail-status-body">
+        <strong>${escapeHtml(t("detail.missing.title"))}</strong>
+        <p>${escapeHtml(t("detail.missing.body"))}</p>
+        <code>${escapeHtml(repo.rootPath)}</code>
+      </div>
+      <button type="button" class="btn btn-sm btn-primary" onclick="removeMissingProject('${jsStr(repo.id)}')">${escapeHtml(t("detail.missing.remove"))}</button>
+    </div>`
+  }
+  if (repo.isRemote) {
+    return `<div class="detail-status-banner detail-remote">
+      <div class="detail-status-icon"><i class="mdi mdi-cloud-outline"></i></div>
+      <div class="detail-status-body">
+        <strong>${escapeHtml(t("detail.remote.title"))}</strong>
+        <p>${escapeHtml(t("detail.remote.body"))}</p>
+        <code>${escapeHtml(repo.rootPath)}</code>
+      </div>
+    </div>`
+  }
+  return ""
+}
+
+function renderDetailTabs(repo) {
+  const available = getAvailableDetailTabs(repo)
+  const statusBanner = renderDetailStatusBanner(repo)
+  if (!available.length) return statusBanner
+
+  let activeTab = getActiveDetailTab(repo.id)
+  if (!available.includes(activeTab)) activeTab = available[0]
+
+  const tabsHtml = available
+    .map((tab) => {
+      const icon = tab === "scripts" ? "mdi-play-circle-outline" : "mdi-code-braces"
+      const label = tab === "scripts" ? t("detail.tabs.scripts") : t("detail.tabs.env")
+      return `<button type="button" class="inspector-tab ${activeTab === tab ? "active" : ""}" data-tab="${tab}"><i class="mdi ${icon}"></i><span>${escapeHtml(label)}</span></button>`
+    })
+    .join("")
+
+  const panelsHtml = available
+    .map((tab) => {
+      const content = tab === "scripts" ? renderScripts(repo) : renderEnvPanel(repo)
+      return `<div class="inspector-tab-panel ${activeTab === tab ? "" : "hidden"}" data-tab="${tab}">${content}</div>`
+    })
+    .join("")
+
+  return `${statusBanner}<div class="inspector-tabs">${tabsHtml}</div>${panelsHtml}`
+}
+
+async function loadEnvData(repoId) {
+  const data = await api(`/api/repos/${encodeURIComponent(repoId)}/env`)
+  envDataCache.set(repoId, data)
+  return data
+}
+
+async function refreshEnvPanel(repoId) {
+  if (selectedRepoId !== repoId) return
+  const panel = detailContent.querySelector('.inspector-tab-panel[data-tab="env"]')
+  if (!panel) return
+  const repo = repos.get(repoId)
+  if (!repo) return
+  panel.innerHTML = renderEnvPanel(repo)
+}
+
+function markEnvChanged(repoId) {
+  if (getAliveSessionsForRepo(repoId).length) {
+    envRestartPending.add(repoId)
+  }
+}
+
+async function saveEnvEntries(repoId, entries) {
+  const result = await api(`/api/repos/${encodeURIComponent(repoId)}/env`, {
+    method: "PUT",
+    body: JSON.stringify({ entries })
+  })
+  envDataCache.set(repoId, result)
+  markEnvChanged(repoId)
+  await refreshEnvPanel(repoId)
+}
+
+async function switchEnvVariant(repoId, key, variantIndex) {
+  const result = await api(`/api/repos/${encodeURIComponent(repoId)}/env/variant`, {
+    method: "POST",
+    body: JSON.stringify({ key, variantIndex })
+  })
+  envDataCache.set(repoId, result)
+  markEnvChanged(repoId)
+  await refreshEnvPanel(repoId)
+}
+
+async function addEnvVariant(repoId, key, value) {
+  const result = await api(`/api/repos/${encodeURIComponent(repoId)}/env/variants`, {
+    method: "POST",
+    body: JSON.stringify({ key, value })
+  })
+  envDataCache.set(repoId, result)
+  markEnvChanged(repoId)
+  await refreshEnvPanel(repoId)
+}
+
+function initDetailPanelEvents() {
+  if (detailPanelBound) return
+  detailPanelBound = true
+
+  detailContent.addEventListener("click", async (e) => {
+    const tab = e.target.closest(".inspector-tab")
+    if (tab && selectedRepoId) {
+      const repo = repos.get(selectedRepoId)
+      if (!repo) return
+      const name = tab.dataset.tab
+      if (!name || name === getActiveDetailTab(repo.id)) return
+      await setActiveDetailTab(repo.id, name)
+      renderDetail()
+      return
+    }
+
+    const favBtn = e.target.closest(".script-fav")
+    if (favBtn?.dataset.repo && favBtn?.dataset.script) {
+      e.stopPropagation()
+      try {
+        await toggleFavoriteScript(favBtn.dataset.repo, favBtn.dataset.script)
+      } catch (err) {
+        alert(err.message || t("scripts.favoriteError"))
+      }
+      return
+    }
+
+    const createBtn = e.target.closest(".env-create-btn")
+    if (createBtn?.dataset.repo) {
+      try {
+        await saveEnvEntries(createBtn.dataset.repo, [])
+      } catch (err) {
+        alert(err.message || t("env.saveError"))
+      }
+      return
+    }
+
+    const restartBtn = e.target.closest(".env-restart-btn")
+    if (restartBtn?.dataset.repo) {
+      const repoId = restartBtn.dataset.repo
+      const sessions = getAliveSessionsForRepo(repoId)
+      for (const s of sessions) {
+        await restartScript(repoId, s.label)
+      }
+      envRestartPending.delete(repoId)
+      await refreshEnvPanel(repoId)
+      return
+    }
+
+    const dismissBtn = e.target.closest(".env-restart-dismiss")
+    if (dismissBtn?.dataset.repo) {
+      envRestartPending.delete(dismissBtn.dataset.repo)
+      await refreshEnvPanel(dismissBtn.dataset.repo)
+      return
+    }
+
+    const variantBtn = e.target.closest(".env-variant-radio")
+    if (variantBtn?.dataset.key != null && selectedRepoId) {
+      const index = parseInt(variantBtn.dataset.index, 10)
+      if (Number.isNaN(index)) return
+      try {
+        await switchEnvVariant(selectedRepoId, variantBtn.dataset.key, index)
+      } catch (err) {
+        alert(err.message || t("env.saveError"))
+      }
+      return
+    }
+
+    const copyBtn = e.target.closest(".env-copy-btn")
+    if (copyBtn?.dataset.repo) {
+      try {
+        const includeCommented = envIncludeCommentedChecked()
+        const qs = includeCommented ? "?includeCommented=1" : ""
+        const data = await api(
+          `/api/repos/${encodeURIComponent(copyBtn.dataset.repo)}/env/export${qs}`
+        )
+        await navigator.clipboard.writeText(data.text || "")
+        flashActionButton(copyBtn)
+        showToast(t("env.copySuccess"))
+      } catch (err) {
+        showToast(err.message || t("env.copyError"), { type: "error" })
+      }
+      return
+    }
+
+    const exampleBtn = e.target.closest(".env-example-btn")
+    if (exampleBtn?.dataset.repo) {
+      try {
+        const includeCommented = envIncludeCommentedChecked()
+        const data = await api(`/api/repos/${encodeURIComponent(exampleBtn.dataset.repo)}/env/example`, {
+          method: "POST",
+          body: JSON.stringify({ includeCommented })
+        })
+        flashActionButton(exampleBtn)
+        showToast(t("env.exampleSuccess", { path: ".env.example" }))
+      } catch (err) {
+        showToast(err.message || t("env.exampleError"), { type: "error" })
+      }
+      return
+    }
+
+    const includeCommentedCb = e.target.closest(".env-include-commented-cb")
+    if (includeCommentedCb) {
+      envIncludeCommented = includeCommentedCb.checked
+      localStorage.setItem("dock-env-include-commented", envIncludeCommented ? "1" : "0")
+      return
+    }
+
+    const addVariantBtn = e.target.closest(".env-add-variant")
+    if (addVariantBtn?.dataset.key && selectedRepoId) {
+      const value = prompt(t("env.variantPrompt"))
+      if (value === null) return
+      try {
+        await addEnvVariant(selectedRepoId, addVariantBtn.dataset.key, value)
+      } catch (err) {
+        alert(err.message || t("env.saveError"))
+      }
+      return
+    }
+
+    if (e.target.closest(".env-add-variable-btn") && selectedRepoId) {
+      const keyInput = detailContent.querySelector(".env-new-key")
+      const valueInput = detailContent.querySelector(".env-new-value")
+      const key = keyInput?.value.trim()
+      const value = valueInput?.value ?? ""
+      if (!key) return
+      const data = envDataCache.get(selectedRepoId) || { entries: [] }
+      const entries = [
+        ...(data.entries || []),
+        { type: "var", key, variants: [{ value, active: true }] }
+      ]
+      try {
+        await saveEnvEntries(selectedRepoId, entries)
+        if (keyInput) keyInput.value = ""
+        if (valueInput) valueInput.value = ""
+      } catch (err) {
+        alert(err.message || t("env.saveError"))
+      }
+    }
+  })
+
+  detailContent.addEventListener(
+    "focusout",
+    async (e) => {
+      const input = e.target.closest(".env-value-input")
+      if (!input || !selectedRepoId) return
+      const key = input.dataset.key
+      const index = parseInt(input.dataset.index, 10)
+      if (!key || Number.isNaN(index)) return
+      const data = envDataCache.get(selectedRepoId)
+      if (!data) return
+      const entry = (data.entries || []).find((item) => item.type === "var" && item.key === key)
+      if (!entry || entry.variants[index]?.value === input.value) return
+      const entries = JSON.parse(JSON.stringify(data.entries))
+      const target = entries.find((item) => item.type === "var" && item.key === key)
+      if (!target) return
+      target.variants[index].value = input.value
+      try {
+        await saveEnvEntries(selectedRepoId, entries)
+      } catch (err) {
+        alert(err.message || t("env.saveError"))
+      }
+    },
+    true
+  )
+}
+
 function renderDetail() {
   applyDetailState()
   if (!selectedRepoId || !repos.has(selectedRepoId)) {
@@ -1005,7 +1559,7 @@ function renderDetail() {
     : ""
 
   const githubBtn = repo.githubUrl
-    ? `<a class="btn-icon-square" href="${escapeHtml(repo.githubUrl)}" target="_blank" rel="noopener" title="GitHub"><i class="mdi mdi-github"></i></a>`
+    ? `<button type="button" class="btn-icon-square" onclick="openGithub('${jsStr(repo.id)}')" title="GitHub"><i class="mdi mdi-github"></i></button>`
     : ""
 
   const isHiddenView = repo.enabled === false
@@ -1051,13 +1605,27 @@ function renderDetail() {
         </button>
       </div>
       ${gitRow}
-      ${renderScripts(repo)}
+      ${renderDetailTabs(repo)}
     </div>
   `
 
+  initDetailPanelEvents()
   initScriptsDnD()
   initBranchPicker(repo)
   updateTerminalUI()
+
+  if (getActiveDetailTab(repo.id) === "env" && repoHasEnv(repo)) {
+    loadEnvData(repo.id)
+      .then(() => {
+        if (selectedRepoId === repo.id) refreshEnvPanel(repo.id)
+      })
+      .catch((err) => {
+        const panel = detailContent.querySelector('.inspector-tab-panel[data-tab="env"]')
+        if (panel && selectedRepoId === repo.id) {
+          panel.innerHTML = `<div class="env-panel env-error"><p>${escapeHtml(err.message || t("env.saveError"))}</p></div>`
+        }
+      })
+  }
 }
 
 let branchPickerCloseHandler = null
@@ -1211,9 +1779,246 @@ function initTerminalResize() {
   window.addEventListener("touchend", onEnd)
 }
 
+function initDetailResize() {
+  const handle = document.getElementById("detail-resize-handle")
+  const detailPanel = document.getElementById("detail-panel")
+  if (!handle || !detailPanel) return
+
+  let resizing = false
+  let startX = 0
+  let startW = 0
+  let rawWidth = 0
+  let closeReady = false
+  let rafId = null
+
+  const maxDetailWidth = () => Math.floor(window.innerWidth * 0.6)
+
+  const scheduleWidth = (w) => {
+    if (rafId) return
+    rafId = requestAnimationFrame(() => {
+      detailPanel.style.width = `${w}px`
+      rafId = null
+    })
+  }
+
+  const onMove = (e) => {
+    if (!resizing) return
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    rawWidth = startW + (startX - clientX)
+    const maxW = maxDetailWidth()
+
+    if (rawWidth >= MIN_DETAIL_WIDTH) {
+      closeReady = false
+      detailWidth = Math.min(maxW, rawWidth)
+      scheduleWidth(detailWidth)
+      return
+    }
+
+    const overshoot = MIN_DETAIL_WIDTH - rawWidth
+    closeReady = overshoot >= DETAIL_CLOSE_OVERSHOOT
+    const visual = MIN_DETAIL_WIDTH - Math.min(overshoot, DETAIL_CLOSE_OVERSHOOT) * 0.35
+    scheduleWidth(visual)
+  }
+
+  const onEnd = () => {
+    if (!resizing) return
+    resizing = false
+    handle.classList.remove("active")
+    appEl.classList.remove("detail-resizing")
+    if (closeReady) {
+      closeDetailPanel({ keepClosed: true })
+      return
+    }
+    const maxW = maxDetailWidth()
+    detailWidth = Math.max(
+      MIN_DETAIL_WIDTH,
+      Math.min(maxW, rawWidth >= MIN_DETAIL_WIDTH ? rawWidth : MIN_DETAIL_WIDTH)
+    )
+    applyDetailState()
+    saveDetailPrefs()
+  }
+
+  const onStart = (e) => {
+    if (detailCollapsed || !selectedRepoId) return
+    e.preventDefault()
+    resizing = true
+    closeReady = false
+    startX = e.touches ? e.touches[0].clientX : e.clientX
+    startW = detailWidth
+    handle.classList.add("active")
+    appEl.classList.add("detail-resizing")
+  }
+
+  handle.addEventListener("mousedown", onStart)
+  handle.addEventListener("touchstart", onStart, { passive: false })
+  window.addEventListener("mousemove", onMove)
+  window.addEventListener("mouseup", onEnd)
+  window.addEventListener("touchmove", onMove, { passive: true })
+  window.addEventListener("touchend", onEnd)
+}
+
+function initSidebarResize() {
+  const handle = document.getElementById("sidebar-resize-handle")
+  const sidebar = document.getElementById("sidebar")
+  if (!handle || !sidebar) return
+
+  let resizing = false
+  let startX = 0
+  let startW = 0
+  let rawWidth = 0
+  let collapseReady = false
+  let wasCollapsed = false
+
+  const maxSidebarWidth = () => Math.min(MAX_SIDEBAR_WIDTH, Math.floor(window.innerWidth * 0.35))
+
+  const setPreviewWidth = (w) => {
+    document.documentElement.style.setProperty("--sidebar-w", `${w}px`)
+  }
+
+  const updatePreviewLabels = (w) => {
+    const showLabels = wasCollapsed ? w >= SIDEBAR_EXPAND_THRESHOLD : true
+    appEl.classList.toggle("sidebar-resize-preview", showLabels)
+  }
+
+  const finishResize = () => {
+    if (!resizing) return
+    resizing = false
+    handle.classList.remove("active")
+    appEl.classList.remove("sidebar-resizing", "sidebar-resize-preview")
+    sidebar.style.width = ""
+
+    if (wasCollapsed) {
+      if (rawWidth >= SIDEBAR_EXPAND_THRESHOLD) {
+        sidebarCollapsed = false
+        sidebarWidth = Math.min(maxSidebarWidth(), Math.max(MIN_SIDEBAR_WIDTH, rawWidth))
+      } else {
+        sidebarCollapsed = true
+      }
+    } else if (collapseReady) {
+      sidebarCollapsed = true
+    } else {
+      sidebarCollapsed = false
+      sidebarWidth = Math.max(
+        MIN_SIDEBAR_WIDTH,
+        Math.min(maxSidebarWidth(), rawWidth >= MIN_SIDEBAR_WIDTH ? rawWidth : MIN_SIDEBAR_WIDTH)
+      )
+    }
+
+    wasCollapsed = false
+    applySidebarState()
+    saveSidebarPrefs()
+  }
+
+  const onMove = (e) => {
+    if (!resizing) return
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    rawWidth = startW + (clientX - startX)
+    const maxW = maxSidebarWidth()
+
+    if (wasCollapsed) {
+      collapseReady = false
+      const w = Math.max(SIDEBAR_COLLAPSED_W, Math.min(maxW, rawWidth))
+      setPreviewWidth(w)
+      updatePreviewLabels(w)
+      return
+    }
+
+    if (rawWidth >= MIN_SIDEBAR_WIDTH) {
+      collapseReady = false
+      sidebarWidth = Math.min(maxW, rawWidth)
+      setPreviewWidth(sidebarWidth)
+      updatePreviewLabels(sidebarWidth)
+      return
+    }
+
+    const overshoot = MIN_SIDEBAR_WIDTH - rawWidth
+    collapseReady = overshoot >= SIDEBAR_COLLAPSE_OVERSHOOT
+    const visual = MIN_SIDEBAR_WIDTH - Math.min(overshoot, SIDEBAR_COLLAPSE_OVERSHOOT) * 0.35
+    const w = Math.max(SIDEBAR_COLLAPSED_W, visual)
+    setPreviewWidth(w)
+    updatePreviewLabels(w)
+  }
+
+  const onStart = (e) => {
+    e.preventDefault()
+    resizing = true
+    wasCollapsed = sidebarCollapsed
+    collapseReady = false
+    startX = e.touches ? e.touches[0].clientX : e.clientX
+    startW = wasCollapsed ? SIDEBAR_COLLAPSED_W : sidebarWidth
+    handle.classList.add("active")
+    appEl.classList.add("sidebar-resizing")
+    setPreviewWidth(startW)
+    updatePreviewLabels(startW)
+  }
+
+  handle.addEventListener("mousedown", onStart)
+  handle.addEventListener("touchstart", onStart, { passive: false })
+  window.addEventListener("mousemove", onMove)
+  window.addEventListener("mouseup", finishResize)
+  window.addEventListener("touchmove", onMove, { passive: true })
+  window.addEventListener("touchend", finishResize)
+  window.addEventListener("blur", finishResize)
+  handle.addEventListener("pointercancel", finishResize)
+}
+
+function applySidebarState() {
+  const sidebar = document.getElementById("sidebar")
+  appEl.classList.remove("sidebar-resizing", "sidebar-resize-preview")
+  if (sidebar) sidebar.style.width = ""
+  appEl.classList.toggle("sidebar-collapsed", sidebarCollapsed)
+  if (!sidebarCollapsed) {
+    document.documentElement.style.setProperty("--sidebar-w", `${sidebarWidth}px`)
+  }
+  sidebarNav.querySelectorAll(".nav-drag-handle").forEach((el) => {
+    el.draggable = !sidebarCollapsed
+  })
+}
+
+function saveSidebarPrefs() {
+  return api("/api/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ sidebarCollapsed, sidebarWidth })
+  }).catch(() => {})
+}
+
 function applyDetailState() {
   const hidden = !selectedRepoId || detailCollapsed
+  const detailPanel = document.getElementById("detail-panel")
   appEl.classList.toggle("detail-hidden", hidden)
+  if (detailPanel) {
+    detailPanel.style.width = hidden ? "0px" : `${detailWidth}px`
+  }
+}
+
+function saveDetailPrefs(extra = {}) {
+  return api("/api/preferences", {
+    method: "PUT",
+    body: JSON.stringify({
+      detailCollapsed,
+      detailKeepClosed,
+      detailWidth,
+      ...extra
+    })
+  }).catch(() => {})
+}
+
+function closeDetailPanel({ keepClosed = true } = {}) {
+  detailCollapsed = true
+  if (keepClosed) detailKeepClosed = true
+  applyDetailState()
+  renderProjectList()
+  return saveDetailPrefs()
+}
+
+async function openDetailPanel() {
+  if (!selectedRepoId) return
+  detailCollapsed = false
+  detailKeepClosed = false
+  applyDetailState()
+  renderProjectList()
+  renderDetail()
+  await saveDetailPrefs()
 }
 
 function collapseTerminal() {
@@ -1242,12 +2047,29 @@ function toggleTerminalMaximized() {
   applyTerminalState()
 }
 
-async function loadRepos() {
-  const data = await api("/api/repos")
+function mergeReposFromApi(data) {
   repos.clear()
-  for (const repo of [...(data.repos || []), ...(data.hiddenRepos || [])]) {
+  const hiddenIds = new Set((data.hiddenRepos || []).map((repo) => repo.id))
+  const visibleIds = new Set((data.repos || []).map((repo) => repo.id))
+  for (const repo of [...(data.hiddenRepos || []), ...(data.repos || [])]) {
     repos.set(repo.id, repo)
   }
+  for (const id of pendingShownIds) {
+    const repo = repos.get(id)
+    if (repo) repos.set(id, { ...repo, enabled: true })
+    if (visibleIds.has(id) && !hiddenIds.has(id)) pendingShownIds.delete(id)
+  }
+  for (const id of pendingHiddenIds) {
+    const repo = repos.get(id)
+    if (repo) repos.set(id, { ...repo, enabled: false })
+    if (hiddenIds.has(id) && !visibleIds.has(id)) pendingHiddenIds.delete(id)
+  }
+}
+
+async function loadRepos() {
+  const data = await api("/api/repos")
+
+  mergeReposFromApi(data)
   tags = data.tags || []
   scriptOrder = data.scriptOrder || {}
   if (data.listView === "table" || data.listView === "cards") listView = data.listView
@@ -1258,7 +2080,17 @@ async function loadRepos() {
   homePath = data.homePath || ""
   if (data.activeTag) activeTag = data.activeTag
   if (typeof data.sidebarCollapsed === "boolean") sidebarCollapsed = data.sidebarCollapsed
-  if (typeof data.detailCollapsed === "boolean") detailCollapsed = data.detailCollapsed
+  if (typeof data.sidebarWidth === "number" && data.sidebarWidth >= MIN_SIDEBAR_WIDTH) {
+    sidebarWidth = data.sidebarWidth
+  }
+  if (!detailPrefsHydrated) {
+    if (typeof data.detailCollapsed === "boolean") detailCollapsed = data.detailCollapsed
+    if (typeof data.detailKeepClosed === "boolean") detailKeepClosed = data.detailKeepClosed
+    if (typeof data.detailWidth === "number" && data.detailWidth >= MIN_DETAIL_WIDTH) {
+      detailWidth = data.detailWidth
+    }
+    detailPrefsHydrated = true
+  }
   if (typeof data.terminalCollapsed === "boolean") terminalCollapsed = data.terminalCollapsed
   if (data.locale && data.locale !== I18n.locale) {
     await I18n.load(data.locale)
@@ -1267,7 +2099,9 @@ async function loadRepos() {
   }
   tagIcons = data.tagIcons || {}
   stripNumbersInJson = !!data.stripNumbersInJson
-  appEl.classList.toggle("sidebar-collapsed", sidebarCollapsed)
+  detailTabPrefs = data.detailTab || {}
+  favoriteScripts = data.favoriteScripts || {}
+  applySidebarState()
   applyDetailState()
   applyTerminalState()
 
@@ -1312,7 +2146,7 @@ async function hydrateGitForVisible() {
 
 function selectRepo(id) {
   selectedRepoId = id
-  detailCollapsed = false
+  if (!detailKeepClosed) detailCollapsed = false
   recentProjects[id] = Date.now()
   api("/api/preferences", {
     method: "PUT",
@@ -1635,12 +2469,24 @@ function onSessionEvent(data) {
   }
   if (data.type === "exit") {
     const s = sessionState.get(data.sessionId)
+    const label = data.label || s?.label || "script"
+    const repo = repos.get(data.repo)
+    const projectName = repo?.name || data.repo
     if (s) s.alive = false
     renderSessionTabs()
     updateTerminalUI()
     syncRepoRunningState(data.repo)
     if (selectedRepoId === data.repo) updateScriptRowsForRepo(data.repo)
     refreshOpenLinkReady(data.repo).catch(() => {})
+    if (data.code === 0) {
+      showToast(t("toast.scriptFinished", { name: label, project: projectName }))
+    } else if (data.code === null) {
+      showToast(t("toast.scriptStopped", { name: label, project: projectName }), { type: "warning" })
+    } else {
+      showToast(t("toast.scriptFailed", { name: label, project: projectName, code: data.code }), {
+        type: "error"
+      })
+    }
   }
 }
 
@@ -1877,28 +2723,95 @@ async function openFolder(id) {
   const repo = repos.get(id)
   if (!repo?.path) return
   await api("/api/explorer", { method: "POST", body: JSON.stringify({ path: repo.path }) })
+  showToast(t("toast.folderOpened"))
 }
 
 async function openIde(id) {
   const repo = repos.get(id)
   if (!repo?.path) return
   await api(`/api/repos/${encodeURIComponent(id)}/ide`, { method: "POST", body: "{}" })
+  showToast(t("toast.ideOpened"))
+}
+
+function openGithub(id) {
+  const repo = repos.get(id)
+  if (!repo?.githubUrl) return
+  window.open(repo.githubUrl, "_blank", "noopener")
+  showToast(t("toast.githubOpened"))
+}
+
+function markPendingVisibility(id, enabled) {
+  const repo = repos.get(id)
+  const ids = new Set([id])
+  if (repo?.rootPath) {
+    const pathKey = repo.rootPath.replace(/\\/g, "/").toLowerCase()
+    for (const entry of repos.values()) {
+      if (entry.rootPath?.replace(/\\/g, "/").toLowerCase() === pathKey) ids.add(entry.id)
+    }
+  }
+  if (enabled) {
+    for (const entryId of ids) {
+      pendingShownIds.add(entryId)
+      pendingHiddenIds.delete(entryId)
+      const entry = repos.get(entryId)
+      if (entry) repos.set(entryId, { ...entry, enabled: true })
+    }
+  } else {
+    for (const entryId of ids) {
+      pendingHiddenIds.add(entryId)
+      pendingShownIds.delete(entryId)
+      const entry = repos.get(entryId)
+      if (entry) repos.set(entryId, { ...entry, enabled: false })
+    }
+  }
 }
 
 async function hideRepo(id) {
-  await api(`/api/repos/${encodeURIComponent(id)}/hide`, { method: "POST", body: "{}" })
+  const repo = repos.get(id)
+  markPendingVisibility(id, false)
   if (selectedRepoId === id) selectedRepoId = null
-  await loadRepos()
+  renderAll()
+  try {
+    await api(`/api/repos/${encodeURIComponent(id)}/hide`, {
+      method: "POST",
+      body: "{}"
+    })
+    showToast(t("toast.projectHidden", { name: repo?.name || id }))
+  } catch (err) {
+    pendingHiddenIds.delete(id)
+    pendingShownIds.delete(id)
+    const current = repos.get(id)
+    if (current) repos.set(id, { ...current, enabled: true })
+    renderAll()
+    showToast(err.message || t("toast.projectHideError"), { type: "error" })
+  }
 }
 
 async function showRepo(id) {
-  await api(`/api/repos/${encodeURIComponent(id)}/show`, { method: "POST", body: "{}" })
-  await loadRepos()
+  const repo = repos.get(id)
+  markPendingVisibility(id, true)
   if (!getHiddenRepos().length) showHiddenOnly = false
   renderAll()
+  try {
+    const data = await api(`/api/repos/${encodeURIComponent(id)}/show`, {
+      method: "POST",
+      body: "{}"
+    })
+    const current = repos.get(id)
+    if (current) repos.set(id, { ...current, ...(data.repo || {}), enabled: true })
+    showToast(t("toast.projectRestored", { name: repo?.name || id }))
+  } catch (err) {
+    pendingShownIds.delete(id)
+    pendingHiddenIds.delete(id)
+    const current = repos.get(id)
+    if (current) repos.set(id, { ...current, enabled: false })
+    renderAll()
+    showToast(err.message || t("toast.projectRestoreError"), { type: "error" })
+  }
 }
 
 async function unregisterRepo(id) {
+  const repo = repos.get(id)
   if (!confirm(t("context.deleteProjectConfirm"))) return
   await api(`/api/repos/${encodeURIComponent(id)}`, { method: "DELETE" })
   if (selectedRepoId === id) {
@@ -1906,6 +2819,7 @@ async function unregisterRepo(id) {
     applyDetailState()
   }
   await loadRepos()
+  showToast(t("toast.projectDeleted", { name: repo?.name || id }))
 }
 
 function connectSSE() {
@@ -1928,7 +2842,11 @@ function connectSSE() {
   })
 
   es.addEventListener("projects-changed", () => {
-    loadRepos().catch(() => {})
+    if (projectsReloadTimer) clearTimeout(projectsReloadTimer)
+    projectsReloadTimer = window.setTimeout(() => {
+      projectsReloadTimer = null
+      loadRepos().catch(() => {})
+    }, 300)
   })
 
   es.addEventListener("repo-update", (e) => {
@@ -1962,10 +2880,12 @@ async function addProject() {
 window.runScript = runScript
 window.pauseScript = pauseScript
 window.restartScript = restartScript
+window.removeMissingProject = removeMissingProject
 window.gitPull = gitPull
 window.gitFetch = gitFetch
 window.openFolder = openFolder
 window.openIde = openIde
+window.openGithub = openGithub
 window.hideRepo = hideRepo
 window.showRepo = showRepo
 window.openProjectMenu = openProjectMenu
@@ -2051,15 +2971,25 @@ document.getElementById("list-view-toggle")?.addEventListener("click", () => {
   }).catch(() => {})
   renderProjectList()
 })
-document.getElementById("detail-toggle")?.addEventListener("click", () => {
-  if (!selectedRepoId) return
-  detailCollapsed = !detailCollapsed
-  applyDetailState()
-  api("/api/preferences", {
-    method: "PUT",
-    body: JSON.stringify({ detailCollapsed })
-  }).catch(() => {})
-  renderProjectList()
+function getMostRecentRepoId() {
+  const sorted = Object.entries(recentProjects).sort((a, b) => b[1] - a[1])
+  for (const [id] of sorted) {
+    if (repos.has(id)) return id
+  }
+  return null
+}
+
+document.getElementById("detail-toggle")?.addEventListener("click", async () => {
+  if (!selectedRepoId) {
+    const recentId = getMostRecentRepoId()
+    if (!recentId) return
+    selectRepo(recentId)
+    if (!detailCollapsed) return
+    await openDetailPanel()
+    return
+  }
+  if (detailCollapsed) await openDetailPanel()
+  else await closeDetailPanel({ keepClosed: true })
 })
 document.getElementById("add-project-btn").addEventListener("click", addProject)
 document.getElementById("hidden-btn").addEventListener("click", () => {
@@ -2374,6 +3304,7 @@ async function submitCreateProject() {
       await loadRepos()
       selectRepo(data.repo.id)
       closeCreateProject()
+      showToast(t("toast.projectCreated", { name: data.repo.name || name }))
     }
   } catch (err) {
     const key =
@@ -2532,14 +3463,8 @@ document.addEventListener("keydown", (e) => {
 })
 document.getElementById("sidebar-toggle").addEventListener("click", () => {
   sidebarCollapsed = !sidebarCollapsed
-  appEl.classList.toggle("sidebar-collapsed", sidebarCollapsed)
-  sidebarNav.querySelectorAll(".nav-drag-handle").forEach((el) => {
-    el.draggable = !sidebarCollapsed
-  })
-  api("/api/preferences", {
-    method: "PUT",
-    body: JSON.stringify({ sidebarCollapsed })
-  }).catch(() => {})
+  applySidebarState()
+  saveSidebarPrefs()
 })
 
 document.getElementById("terminal-toggle").addEventListener("click", (e) => {
@@ -2625,7 +3550,11 @@ connectSSE()
 initSidebarDnD()
 bindProjectListDnD()
 initTerminalResize()
+initDetailResize()
+initSidebarResize()
 document.documentElement.style.setProperty("--term-body-h", `${terminalBodyHeight}px`)
+applySidebarState()
+applyDetailState()
 
 window.onLocaleChange = () => {
   renderAll()

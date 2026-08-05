@@ -126,6 +126,11 @@
             </button>
           </div>
         </aside>
+        <div
+          class="sidebar-resize-handle"
+          id="sidebar-resize-handle"
+          aria-hidden="true"
+        ></div>
 
         <div class="workspace">
           <div class="main-panels">
@@ -202,25 +207,34 @@
                   </button>
                 </div>
               </div>
-              <div class="list-header">
-                <span>
-                  <i class="mdi mdi-folder-outline"></i>
-                  <span data-i18n="list.name">Name</span>
-                </span>
-                <span>
-                  <i class="mdi mdi-source-branch"></i>
-                  <span data-i18n="list.branch">Branch</span>
-                </span>
-              </div>
               <div
-                class="project-list"
-                id="project-list"
+                class="project-table-wrap"
+                id="project-table-wrap"
               >
+                <div class="list-header">
+                  <span>
+                    <i class="mdi mdi-folder-outline"></i>
+                    <span data-i18n="list.name">Name</span>
+                  </span>
+                  <span>
+                    <i class="mdi mdi-source-branch"></i>
+                    <span data-i18n="list.branch">Branch</span>
+                  </span>
+                  <span>
+                    <i class="mdi mdi-play-circle-outline"></i>
+                    <span data-i18n="list.actions">Actions</span>
+                  </span>
+                </div>
                 <div
-                  class="empty-state"
-                  data-i18n="list.loading"
+                  class="project-list"
+                  id="project-list"
                 >
-                  Loading…
+                  <div
+                    class="empty-state"
+                    data-i18n="list.loading"
+                  >
+                    Loading…
+                  </div>
                 </div>
               </div>
             </section>
@@ -229,6 +243,11 @@
               class="detail-panel"
               id="detail-panel"
             >
+              <div
+                class="detail-resize-handle"
+                id="detail-resize-handle"
+                title="Resize"
+              ></div>
               <div
                 class="detail-empty"
                 id="detail-empty"
@@ -417,8 +436,8 @@
               class="settings-hint settings-hint-compact"
               data-i18n="settings.projectsJsonHint"
             >
-              Shared with the VS Code / Cursor Project Manager extension. Set its “Projects Location”
-              to this folder — edits in either Dock or the IDE stay in sync.
+              Shared with the VS Code / Cursor Project Manager extension. Set its “Projects
+              Location” to this folder — edits in either Dock or the IDE stay in sync.
             </p>
           </section>
 
@@ -470,8 +489,8 @@
               class="settings-hint settings-hint-compact"
               data-i18n="settings.resetHint"
             >
-              Clears Dock settings and returns to the setup wizard. Does not delete projects.json
-              or project folders.
+              Clears Dock settings and returns to the setup wizard. Does not delete projects.json or
+              project folders.
             </p>
             <button
               type="button"
@@ -622,7 +641,13 @@
       </div>
     </div>
 
+    <div
+      id="toast-stack"
+      class="toast-stack"
+      aria-live="polite"
+    ></div>
+
     <script src="/i18n.js"></script>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=20260805-2"></script>
   </body>
 </html>

@@ -28,6 +28,7 @@ const discoverProjects = () => {
       profile: project.profile,
       isRemote,
       isLocal: Boolean(localPath),
+      isMissing: !isRemote && !localPath,
       ...meta
     }
   })
@@ -84,11 +85,13 @@ const getRepoDetails = async (projectId, { skipGit = false } = {}) => {
     profile: project.profile,
     isRemote,
     isLocal: Boolean(repoPath),
+    isMissing: !isRemote && !repoPath,
     branch,
     branches,
     isDirty,
     dirtyCount,
     hasGit,
+    hasEnv: meta.hasEnv,
     scripts: meta.scripts,
     packageManager: meta.packageManager,
     hasPackageJson: meta.hasPackageJson,

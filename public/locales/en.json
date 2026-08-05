@@ -38,7 +38,8 @@
     "hideDetail": "Hide project panel",
     "changes": "Changes",
     "clearFilters": "Clear filters",
-    "dragProject": "Drag to reorder"
+    "dragProject": "Drag to reorder",
+    "actions": "Actions"
   },
   "sort": {
     "name": "By name",
@@ -52,7 +53,23 @@
     "actions": "Actions",
     "branchSearch": "Search branches…",
     "noBranches": "No branches",
-    "startDevHint": "Start the dev server"
+    "startDevHint": "Start the server",
+    "tabs": {
+      "scripts": "Scripts",
+      "env": "ENV"
+    },
+    "missing": {
+      "title": "Folder not found",
+      "body": "The project is listed in projects.json but the folder no longer exists on disk.",
+      "short": "Missing",
+      "remove": "Remove from list",
+      "removeConfirm": "Remove \"{name}\" from projects.json?"
+    },
+    "remote": {
+      "title": "Remote project",
+      "body": "This project uses VS Code Remote. Local scripts and .env are not available here.",
+      "short": "Remote"
+    }
   },
   "open": {
     "openApp": "Open",
@@ -68,7 +85,49 @@
     "play": "Run",
     "restartNamed": "Restart {name}",
     "playNamed": "Run {name}",
-    "drag": "Drag to reorder"
+    "drag": "Drag to reorder",
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites",
+    "favoriteError": "Could not update favorites"
+  },
+  "env": {
+    "empty": ".env file not found",
+    "create": "Create .env",
+    "noVariables": "No variables yet",
+    "addVariable": "Add variable",
+    "addVariant": "Add variant",
+    "keyPlaceholder": "KEY",
+    "valuePlaceholder": "value",
+    "variantPrompt": "Value for the new variant:",
+    "selectVariant": "Select variant",
+    "copyActive": "Copy ENV",
+    "copySuccess": "ENV copied to clipboard",
+    "generateExample": "Generate .env.example",
+    "exampleSuccess": "{path} created",
+    "includeCommented": "Include commented variants",
+    "copyError": "Could not copy ENV",
+    "exampleError": "Could not create .env.example",
+    "restart": {
+      "title": "ENV changed",
+      "action": "Restart",
+      "dismiss": "Later"
+    },
+    "saveError": "Could not save .env"
+  },
+  "toast": {
+    "projectHidden": "«{name}» hidden",
+    "projectHideError": "Could not hide «{name}»",
+    "projectRestored": "«{name}» restored",
+    "projectRestoreError": "Could not restore «{name}»",
+    "projectMoved": "«{name}» moved to {category}",
+    "projectDeleted": "«{name}» removed from list",
+    "projectCreated": "Project «{name}» created",
+    "folderOpened": "Folder opened in Explorer",
+    "ideOpened": "Opened in IDE",
+    "githubOpened": "GitHub opened in browser",
+    "scriptFinished": "{name} finished ({project})",
+    "scriptStopped": "{name} stopped ({project})",
+    "scriptFailed": "{name} failed with code {code} ({project})"
   },
   "status": {
     "running": "Process running",
