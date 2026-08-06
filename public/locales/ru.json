@@ -56,7 +56,8 @@
     "startDevHint": "Запустите сервер",
     "tabs": {
       "scripts": "Скрипты",
-      "env": "ENV"
+      "env": "ENV",
+      "packages": "Пакеты"
     },
     "missing": {
       "title": "Папка не найдена",
@@ -113,6 +114,24 @@
       "dismiss": "Позже"
     },
     "saveError": "Не удалось сохранить .env"
+  },
+  "packages": {
+    "empty": "Файл package.json не найден",
+    "noPackages": "Зависимостей пока нет",
+    "dependencies": "dependencies",
+    "devDependencies": "dev Dependencies",
+    "addVariant": "Добавить версию",
+    "variantPrompt": "Версия для нового варианта:",
+    "selectVariant": "Выбрать версию",
+    "manager": "Менеджер: {manager}",
+    "saveError": "Не удалось сохранить package.json",
+    "install": {
+      "title": "Версия изменена",
+      "action": "Установить",
+      "dismiss": "Позже",
+      "started": "Установка зависимостей запущена",
+      "error": "Не удалось запустить установку"
+    }
   },
   "toast": {
     "projectHidden": "«{name}» скрыт",

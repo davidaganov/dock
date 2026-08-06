@@ -1546,6 +1546,34 @@ body {
   border: 1px solid var(--border);
 }
 
+.inspector-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.inspector-row.dragging {
+  opacity: 0.5;
+}
+
+.inspector-row.drag-over {
+  border-color: var(--accent-border);
+  background: var(--accent-glow);
+}
+
+.inspector-row:hover {
+  border-color: var(--accent-border);
+}
+
+.inspector-row .script-drag {
+  margin-top: 2px;
+}
+
+.env-var-group-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .env-var-key,
 .env-var-key-label {
   display: block;
@@ -1609,7 +1637,8 @@ body {
   border-color: var(--accent);
 }
 
-.env-add-variant {
+.env-add-variant,
+.pkg-add-variant {
   margin-top: 8px;
 }
 
@@ -1620,6 +1649,24 @@ body {
   align-items: center;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+
+.pkg-panel .pkg-manager-hint {
+  margin-bottom: 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.pkg-section + .pkg-section {
+  margin-top: 14px;
+}
+
+.pkg-section-title {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
 }
 
 .env-new-key,

@@ -23,7 +23,10 @@ const defaultPreferences = () => {
     projectOrder: {},
     categoryDirs: {},
     locale: "en",
-    detailTab: {}
+    detailTab: {},
+    packageVariants: {},
+    envOrder: {},
+    packageOrder: {}
   }
 }
 
@@ -137,7 +140,49 @@ const normalizePreferences = (raw) => {
   if (raw.detailTab && typeof raw.detailTab === "object") {
     for (const [id, tab] of Object.entries(raw.detailTab)) {
       if (!isValidProjectId(id)) continue
-      if (tab === "scripts" || tab === "env") prefs.detailTab[id] = tab
+      if (tab === "scripts" || tab === "env" || tab === "packages") prefs.detailTab[id] = tab
+    }
+  }
+
+  if (raw.packageVariants && typeof raw.packageVariants === "object") {
+    for (const [id, packages] of Object.entries(raw.packageVariants)) {
+      if (!isValidProjectId(id) || !packages || typeof packages !== "object") continue
+      const normalized = {}
+      for (const [key, item] of Object.entries(packages)) {
+        if (typeof key !== "string" || !item?.variants || !Array.isArray(item.variants)) continue
+        const variants = item.variants
+          .filter((v) => v && typeof v.value === "string")
+          .map((v) => ({ value: v.value, active: !!v.active }))
+        if (!variants.length) continue
+        normalized[key] = { variants }
+      }
+      if (Object.keys(normalized).length) prefs.packageVariants[id] = normalized
+    }
+  }
+
+  if (raw.envOrder && typeof raw.envOrder === "object") {
+    for (const [id, keys] of Object.entries(raw.envOrder)) {
+      if (!isValidProjectId(id) || !Array.isArray(keys)) continue
+      const normalized = keys.filter((k) => typeof k === "string" && k.trim())
+      if (normalized.length) prefs.envOrder[id] = [...new Set(normalized)]
+    }
+  }
+
+  if (raw.packageOrder && typeof raw.packageOrder === "object") {
+    for (const [id, sections] of Object.entries(raw.packageOrder)) {
+      if (!isValidProjectId(id) || !sections || typeof sections !== "object") continue
+      const dependencies = Array.isArray(sections.dependencies)
+        ? sections.dependencies.filter((k) => typeof k === "string" && k.trim())
+        : []
+      const devDependencies = Array.isArray(sections.devDependencies)
+        ? sections.devDependencies.filter((k) => typeof k === "string" && k.trim())
+        : []
+      if (dependencies.length || devDependencies.length) {
+        prefs.packageOrder[id] = {
+          dependencies: [...new Set(dependencies)],
+          devDependencies: [...new Set(devDependencies)]
+        }
+      }
     }
   }
 
@@ -175,7 +220,10 @@ const savePreferences = (prefs) => {
     projectOrder: prefs.projectOrder,
     categoryDirs: prefs.categoryDirs,
     locale: prefs.locale,
-    detailTab: prefs.detailTab
+    detailTab: prefs.detailTab,
+    packageVariants: prefs.packageVariants,
+    envOrder: prefs.envOrder,
+    packageOrder: prefs.packageOrder
   })
   writeDockFile(next)
 }
@@ -207,6 +255,24 @@ const prunePreferences = (prefs, existingIds) => {
       changed = true
     }
   }
+  for (const id of Object.keys(prefs.packageVariants)) {
+    if (!idSet.has(id)) {
+      delete prefs.packageVariants[id]
+      changed = true
+    }
+  }
+  for (const id of Object.keys(prefs.envOrder)) {
+    if (!idSet.has(id)) {
+      delete prefs.envOrder[id]
+      changed = true
+    }
+  }
+  for (const id of Object.keys(prefs.packageOrder)) {
+    if (!idSet.has(id)) {
+      delete prefs.packageOrder[id]
+      changed = true
+    }
+  }
   return changed
 }
 
@@ -215,6 +281,9 @@ const cleanupProjectPreferences = (prefs, projectId) => {
   delete prefs.defaultScripts[projectId]
   delete prefs.scriptOrder[projectId]
   delete prefs.detailTab[projectId]
+  delete prefs.packageVariants[projectId]
+  delete prefs.envOrder[projectId]
+  delete prefs.packageOrder[projectId]
 }
 
 const remapTagIconKey = (prefs, oldTag, newTag) => {

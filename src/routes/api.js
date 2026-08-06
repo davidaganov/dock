@@ -75,6 +75,22 @@ const {
   serializeEnvExport,
   writeEnvExample
 } = require("../env/env-file")
+const {
+  loadPackageState,
+  savePackageState,
+  setActiveVariant: setPackageVariant,
+  addVariant: addPackageVariant,
+  updateVariantValue,
+  normalizePackageEntries,
+  variantsToPrefs
+} = require("../packages/package-file")
+
+const saveProjectPackageVariants = (projectId, variants) => {
+  const prefs = loadPreferences()
+  if (!variants || !Object.keys(variants).length) delete prefs.packageVariants[projectId]
+  else prefs.packageVariants[projectId] = variants
+  savePreferences(prefs)
+}
 
 const log = (repo, message, type = "info", sessionId = null, i18nKey = null, i18nParams = null) => {
   const entry = {
@@ -151,6 +167,8 @@ const handleReposApi = async (req, res, pathname) => {
       tagIcons: prefs.tagIcons,
       detailTab: prefs.detailTab,
       sessions: listAllSessions(),
+      envOrder: prefs.envOrder,
+      packageOrder: prefs.packageOrder,
       repos: detailedEnabled.filter(Boolean),
       hiddenRepos: detailedHidden.filter(Boolean)
     })
@@ -394,7 +412,7 @@ const handleReposApi = async (req, res, pathname) => {
       prefs.detailTab = { ...prefs.detailTab }
       for (const [id, tab] of Object.entries(body.detailTab)) {
         if (!isValidProjectId(id)) continue
-        if (tab === "scripts" || tab === "env") prefs.detailTab[id] = tab
+        if (tab === "scripts" || tab === "env" || tab === "packages") prefs.detailTab[id] = tab
         else delete prefs.detailTab[id]
       }
     }
@@ -753,6 +771,55 @@ const handleReposApi = async (req, res, pathname) => {
     return sendJson(res, 200, { scriptOrder: prefs.scriptOrder[projectId] || [] })
   }
 
+  if (req.method === "PUT" && sub === "/env-order") {
+    let body = {}
+    try {
+      body = await readBody(req)
+    } catch {
+      return sendJson(res, 400, { error: "Invalid JSON" })
+    }
+    if (!getProjectById(projectId)) return sendJson(res, 404, { error: "Project not found" })
+
+    const keys = Array.isArray(body.keys) ? body.keys.filter((k) => typeof k === "string") : null
+    if (!keys) return sendJson(res, 400, { error: "keys required" })
+
+    const prefs = loadPreferences()
+    if (keys.length) prefs.envOrder[projectId] = [...new Set(keys)]
+    else delete prefs.envOrder[projectId]
+    savePreferences(prefs)
+    return sendJson(res, 200, { envOrder: prefs.envOrder[projectId] || [] })
+  }
+
+  if (req.method === "PUT" && sub === "/package-order") {
+    let body = {}
+    try {
+      body = await readBody(req)
+    } catch {
+      return sendJson(res, 400, { error: "Invalid JSON" })
+    }
+    if (!getProjectById(projectId)) return sendJson(res, 404, { error: "Project not found" })
+
+    const dependencies = Array.isArray(body.dependencies)
+      ? body.dependencies.filter((k) => typeof k === "string")
+      : []
+    const devDependencies = Array.isArray(body.devDependencies)
+      ? body.devDependencies.filter((k) => typeof k === "string")
+      : []
+    const prefs = loadPreferences()
+    if (dependencies.length || devDependencies.length) {
+      prefs.packageOrder[projectId] = {
+        dependencies: [...new Set(dependencies)],
+        devDependencies: [...new Set(devDependencies)]
+      }
+    } else {
+      delete prefs.packageOrder[projectId]
+    }
+    savePreferences(prefs)
+    return sendJson(res, 200, {
+      packageOrder: prefs.packageOrder[projectId] || { dependencies: [], devDependencies: [] }
+    })
+  }
+
   const project = getProjectById(projectId)
   const repoPath = project ? projectPath(project) : null
 
@@ -813,6 +880,34 @@ const handleReposApi = async (req, res, pathname) => {
     return sendJson(res, 200, { favoriteScripts: prefs.favoriteScripts[projectId] || [] })
   }
 
+  if (req.method === "GET" && sub === "/packages") {
+    if (!project) return sendJson(res, 404, { error: "Project not found" })
+    if (!repoPath) return sendJson(res, 400, { error: "Project is not available locally" })
+    const prefs = loadPreferences()
+    const saved = prefs.packageVariants[projectId] || {}
+    return sendJson(res, 200, loadPackageState(repoPath, saved))
+  }
+
+  if (req.method === "PUT" && sub === "/packages") {
+    if (!project) return sendJson(res, 404, { error: "Project not found" })
+    if (!repoPath) return sendJson(res, 400, { error: "Project is not available locally" })
+    let body = {}
+    try {
+      body = await readBody(req)
+    } catch {
+      return sendJson(res, 400, { error: "Invalid JSON" })
+    }
+    try {
+      const entries = normalizePackageEntries(body.entries || [])
+      const result = savePackageState(repoPath, entries)
+      saveProjectPackageVariants(projectId, variantsToPrefs(entries))
+      log(projectId, "Updated package.json", "success")
+      return sendJson(res, 200, result)
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message })
+    }
+  }
+
   if (req.method === "POST") {
     let body = {}
     try {
@@ -863,6 +958,57 @@ const handleReposApi = async (req, res, pathname) => {
         const result = writeEnvExample(repoPath, parsed.entries, { includeCommented })
         log(projectId, "Generated .env.example", "success")
         return sendJson(res, 200, { ok: true, path: result.path })
+      }
+
+      if (sub === "/packages/variant") {
+        const { key, variantIndex } = body
+        if (!key || typeof key !== "string") {
+          return sendJson(res, 400, { error: "key required" })
+        }
+        const prefs = loadPreferences()
+        const saved = prefs.packageVariants[projectId] || {}
+        const { state, packageVariants } = setPackageVariant(repoPath, saved, key, variantIndex)
+        saveProjectPackageVariants(projectId, packageVariants)
+        log(projectId, `Package ${key} → variant ${variantIndex}`, "success")
+        return sendJson(res, 200, { ...state, needsInstall: true })
+      }
+
+      if (sub === "/packages/variants") {
+        const { key, value } = body
+        if (!key || typeof key !== "string") {
+          return sendJson(res, 400, { error: "key required" })
+        }
+        if (typeof value !== "string") {
+          return sendJson(res, 400, { error: "value required" })
+        }
+        const prefs = loadPreferences()
+        const saved = prefs.packageVariants[projectId] || {}
+        const { state, packageVariants } = addPackageVariant(repoPath, saved, key, value)
+        saveProjectPackageVariants(projectId, packageVariants)
+        log(projectId, `Package ${key} variant added`, "success")
+        return sendJson(res, 200, state)
+      }
+
+      if (sub === "/packages/value") {
+        const { key, variantIndex, value } = body
+        if (!key || typeof key !== "string") {
+          return sendJson(res, 400, { error: "key required" })
+        }
+        if (typeof value !== "string") {
+          return sendJson(res, 400, { error: "value required" })
+        }
+        const prefs = loadPreferences()
+        const saved = prefs.packageVariants[projectId] || {}
+        const { state, packageVariants, wrotePackageJson } = updateVariantValue(
+          repoPath,
+          saved,
+          key,
+          variantIndex,
+          value
+        )
+        saveProjectPackageVariants(projectId, packageVariants)
+        log(projectId, `Package ${key} value updated`, "success")
+        return sendJson(res, 200, { ...state, needsInstall: wrotePackageJson })
       }
 
       if (sub === "/checkout") {

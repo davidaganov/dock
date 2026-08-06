@@ -56,7 +56,8 @@
     "startDevHint": "Start the server",
     "tabs": {
       "scripts": "Scripts",
-      "env": "ENV"
+      "env": "ENV",
+      "packages": "Packages"
     },
     "missing": {
       "title": "Folder not found",
@@ -113,6 +114,24 @@
       "dismiss": "Later"
     },
     "saveError": "Could not save .env"
+  },
+  "packages": {
+    "empty": "package.json not found",
+    "noPackages": "No dependencies yet",
+    "dependencies": "dependencies",
+    "devDependencies": "dev Dependencies",
+    "addVariant": "Add version",
+    "variantPrompt": "Version for the new variant:",
+    "selectVariant": "Select version",
+    "manager": "Manager: {manager}",
+    "saveError": "Could not save package.json",
+    "install": {
+      "title": "Version changed",
+      "action": "Install",
+      "dismiss": "Later",
+      "started": "Dependency install started",
+      "error": "Could not start install"
+    }
   },
   "toast": {
     "projectHidden": "«{name}» hidden",

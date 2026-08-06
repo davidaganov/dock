@@ -81,15 +81,20 @@ Categories in Dock map to Project Manager groups (e.g. `01. Work`, `02. Personal
 
 - **Shared project list** with IDE Project Manager via `projects.json` (watched live)
 - **Category sidebar** with drag-and-drop order and optional numeric prefixes (`01. …`)
-- **Table / card views**, filters, and custom project order
-- **One-click** npm / pnpm / yarn scripts
+- **Table / card views**, filters, search, and custom project order
+- **Inspector panel** per project with tabs:
+  - **Scripts** — run / stop / restart npm / pnpm / yarn scripts, favorites, drag-and-drop order
+  - **ENV** — edit `.env` with multiple value variants, copy active env, generate `.env.example`, drag-and-drop order
+  - **Packages** — switch dependency versions with saved presets, drag-and-drop order
+- **Git** — branch picker, pull, fetch; dirty / running status in the list
 - **Integrated terminal** with session tabs and real-time SSE logs
+- **Hide / show** projects without removing them from `projects.json`
 - **Create** empty folders or **clone** repos into a category
 - **Windows system tray** for background server + quick open
 
 ## Configuration
 
-Local file `dock-config.json` stores paths, onboarding flag, and UI preferences.
+Local file `dock-config.json` stores paths, onboarding flag, UI preferences, and per-project inspector state (script order, ENV / package order, package version presets). Project files (`.env`, `package.json`) are only changed when you edit values or switch an active variant — display order stays in Dock.
 
 Example: [`dock-config.example.json`](dock-config.example.json)
 

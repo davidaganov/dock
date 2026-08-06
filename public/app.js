@@ -18,6 +18,8 @@ const repos = new Map()
 const UNCATEGORIZED_KEY = "__uncategorized__"
 let tags = []
 let scriptOrder = {}
+let envOrder = {}
+let packageOrder = {}
 let listView = "table"
 let listSort = "name"
 let listFilters = { running: false, dirty: false }
@@ -53,8 +55,12 @@ let detailTabPrefs = {}
 let favoriteScripts = {}
 /** @type {Map<string, object>} */
 const envDataCache = new Map()
+/** @type {Map<string, object>} */
+const packagesDataCache = new Map()
 /** @type {Set<string>} */
 const envRestartPending = new Set()
+/** @type {Set<string>} */
+const packagesInstallPending = new Set()
 let detailPanelBound = false
 let envIncludeCommented = localStorage.getItem("dock-env-include-commented") === "1"
 let detailPrefsHydrated = false
@@ -143,6 +149,66 @@ function orderedScriptsForRepo(repo) {
   return [...run, ...util]
 }
 
+function applyEnvVarOrder(repoId, vars) {
+  const order = envOrder[repoId]
+  if (!Array.isArray(order) || !order.length) return vars
+  const byKey = new Map(vars.map((entry) => [entry.key, entry]))
+  const result = []
+  for (const key of order) {
+    if (!byKey.has(key)) continue
+    result.push(byKey.get(key))
+    byKey.delete(key)
+  }
+  for (const entry of byKey.values()) result.push(entry)
+  return result
+}
+
+function applyPackageEntryOrder(repoId, entries) {
+  const order = packageOrder[repoId]
+  if (!order || typeof order !== "object") return entries
+  const bySection = { dependencies: [], devDependencies: [] }
+  for (const entry of entries) {
+    if (bySection[entry.section]) bySection[entry.section].push(entry)
+  }
+  const result = []
+  for (const section of ["dependencies", "devDependencies"]) {
+    const items = bySection[section]
+    const sectionOrder = Array.isArray(order[section]) ? order[section] : []
+    const byKey = new Map(items.map((entry) => [entry.key, entry]))
+    for (const key of sectionOrder) {
+      if (!byKey.has(key)) continue
+      result.push(byKey.get(key))
+      byKey.delete(key)
+    }
+    for (const entry of byKey.values()) result.push(entry)
+  }
+  return result
+}
+
+function getOrderedEnvVars(repoId, entries) {
+  return applyEnvVarOrder(repoId, (entries || []).filter((entry) => entry.type === "var"))
+}
+
+function getOrderedPackageEntries(repoId, entries) {
+  return applyPackageEntryOrder(repoId, entries || [])
+}
+
+function setEnvOrderForRepo(repoId, keys) {
+  envOrder = { ...envOrder, [repoId]: [...keys] }
+}
+
+function setPackageOrderForRepo(repoId, section, keys) {
+  const current = packageOrder[repoId] || { dependencies: [], devDependencies: [] }
+  packageOrder = {
+    ...packageOrder,
+    [repoId]: {
+      dependencies: section === "dependencies" ? [...keys] : [...(current.dependencies || [])],
+      devDependencies:
+        section === "devDependencies" ? [...keys] : [...(current.devDependencies || [])]
+    }
+  }
+}
+
 function primaryRunScript(repo) {
   const { run } = normalizeScriptOrder(repo)
   return run[0] || null
@@ -163,10 +229,16 @@ function repoHasEnv(repo) {
   return !!repo.hasEnv
 }
 
+function repoHasPackages(repo) {
+  if (!repo.isLocal || repo.isMissing || repo.isRemote) return false
+  return !!repo.hasPackageJson
+}
+
 function getAvailableDetailTabs(repo) {
   const tabs = []
   if (repoHasScripts(repo)) tabs.push("scripts")
   if (repoHasEnv(repo)) tabs.push("env")
+  if (repoHasPackages(repo)) tabs.push("packages")
   return tabs
 }
 
@@ -516,11 +588,7 @@ function initSidebarDnD() {
     const handle = e.target.closest(".nav-drag-handle")
     if (!handle || sidebarCollapsed) return
     const item = handle.closest(".nav-item[data-tag]")
-    if (
-      !item?.dataset.tag ||
-      item.dataset.tag === UNCATEGORIZED_KEY
-    )
-      return
+    if (!item?.dataset.tag || item.dataset.tag === UNCATEGORIZED_KEY) return
     draggedTag = item.dataset.tag
     item.classList.add("dragging")
     e.dataTransfer.effectAllowed = "move"
@@ -538,12 +606,7 @@ function initSidebarDnD() {
 
   sidebarNav.addEventListener("dragover", (e) => {
     const item = e.target.closest(".nav-item[data-tag]")
-    if (
-      !item ||
-      item.dataset.tag === "__all__" ||
-      item.dataset.tag === UNCATEGORIZED_KEY
-    )
-      return
+    if (!item || item.dataset.tag === "__all__" || item.dataset.tag === UNCATEGORIZED_KEY) return
     if (!draggedTag || item.dataset.tag === draggedTag) return
     e.preventDefault()
     sidebarNav.querySelectorAll(".nav-item.drag-over").forEach((el) => {
@@ -559,12 +622,7 @@ function initSidebarDnD() {
 
   sidebarNav.addEventListener("drop", async (e) => {
     const item = e.target.closest(".nav-item[data-tag]")
-    if (
-      !item ||
-      item.dataset.tag === "__all__" ||
-      item.dataset.tag === UNCATEGORIZED_KEY
-    )
-      return
+    if (!item || item.dataset.tag === "__all__" || item.dataset.tag === UNCATEGORIZED_KEY) return
     e.preventDefault()
     item.classList.remove("drag-over")
     const targetTag = item.dataset.tag
@@ -969,7 +1027,10 @@ function renderProjectCard(repo) {
   const branch =
     gitHydrating && repo.hasGit && !repo.branch ? "…" : repo.branch || (repo.hasGit ? "—" : "—")
   const script = primaryRunScript(repo)
-  const scriptHint = script && !repo.isMissing && !repo.isRemote ? `<span class="project-card-script">${escapeHtml(script)}</span>` : ""
+  const scriptHint =
+    script && !repo.isMissing && !repo.isRemote
+      ? `<span class="project-card-script">${escapeHtml(script)}</span>`
+      : ""
   const branchRow =
     repo.isMissing || repo.isRemote
       ? `<div class="project-card-branch project-card-meta"><i class="mdi ${repo.isRemote ? "mdi-cloud-outline" : "mdi-folder-off-outline"}"></i> ${escapeHtml(repo.isRemote ? t("detail.remote.short") : t("detail.missing.short"))}</div>`
@@ -1153,7 +1214,21 @@ function renderScripts(repo) {
 }
 
 function getActiveDetailTab(repoId) {
-  return detailTabPrefs[repoId] === "env" ? "env" : "scripts"
+  const tab = detailTabPrefs[repoId]
+  if (tab === "env" || tab === "packages") return tab
+  return "scripts"
+}
+
+function detailTabMeta(tab) {
+  if (tab === "env") return { icon: "mdi-code-braces", label: t("detail.tabs.env") }
+  if (tab === "packages") return { icon: "mdi-package-variant", label: t("detail.tabs.packages") }
+  return { icon: "mdi-play-circle-outline", label: t("detail.tabs.scripts") }
+}
+
+function renderDetailTabPanel(repo, tab) {
+  if (tab === "scripts") return renderScripts(repo)
+  if (tab === "env") return renderEnvPanel(repo)
+  return renderPackagesPanel(repo)
 }
 
 async function setActiveDetailTab(repoId, tab) {
@@ -1195,6 +1270,7 @@ function renderEnvVarGroup(entry) {
   const key = entry.key
   const variants = entry.variants || []
   const multi = variants.length > 1
+  const dragHandle = `<span class="script-drag" title="${escapeHtml(t("scripts.drag"))}"><i class="mdi mdi-drag-vertical"></i></span>`
 
   const variantsHtml = variants
     .map((v, i) => {
@@ -1212,22 +1288,28 @@ function renderEnvVarGroup(entry) {
   const addVariantBtn = `<button type="button" class="env-add-variant btn btn-sm" data-key="${escapeHtml(key)}"><i class="mdi mdi-plus"></i> ${escapeHtml(t("env.addVariant"))}</button>`
 
   if (multi) {
-    return `<div class="env-var-group" data-key="${escapeHtml(key)}">
-      <div class="env-var-key">${escapeHtml(key)}</div>
-      <div class="env-variants">${variantsHtml}</div>
-      ${addVariantBtn}
+    return `<div class="env-var-group inspector-row" data-key="${escapeHtml(key)}" data-drag-kind="env" draggable="true">
+      ${dragHandle}
+      <div class="env-var-group-body">
+        <div class="env-var-key">${escapeHtml(key)}</div>
+        <div class="env-variants">${variantsHtml}</div>
+        ${addVariantBtn}
+      </div>
     </div>`
   }
 
-  return `<div class="env-var-group env-var-single" data-key="${escapeHtml(key)}">
-    <label class="env-var-key-label">${escapeHtml(key)}</label>
-    <input type="text" class="env-value-input env-single-value" data-key="${escapeHtml(key)}" data-index="0" value="${escapeHtml(variants[0]?.value || "")}" spellcheck="false" />
-    ${addVariantBtn}
+  return `<div class="env-var-group env-var-single inspector-row" data-key="${escapeHtml(key)}" data-drag-kind="env" draggable="true">
+    ${dragHandle}
+    <div class="env-var-group-body">
+      <label class="env-var-key-label">${escapeHtml(key)}</label>
+      <input type="text" class="env-value-input env-single-value" data-key="${escapeHtml(key)}" data-index="0" value="${escapeHtml(variants[0]?.value || "")}" spellcheck="false" />
+      ${addVariantBtn}
+    </div>
   </div>`
 }
 
 function renderEnvEditor(repoId, data) {
-  const vars = (data.entries || []).filter((e) => e.type === "var")
+  const vars = getOrderedEnvVars(repoId, data.entries)
   const varsHtml = vars.length
     ? vars.map((e) => renderEnvVarGroup(e)).join("")
     : `<p class="env-no-vars">${escapeHtml(t("env.noVariables"))}</p>`
@@ -1260,6 +1342,97 @@ function renderEnvPanel(repo) {
   }
   if (!cached.exists) return renderEnvEmpty(repo.id)
   return renderEnvEditor(repo.id, cached)
+}
+
+function renderPackagesInstallBanner(repoId) {
+  if (!packagesInstallPending.has(repoId)) return ""
+  return `<div class="env-restart-banner pkg-install-banner" data-repo-id="${escapeHtml(repoId)}">
+    <span class="env-restart-text"><i class="mdi mdi-alert-outline"></i> ${escapeHtml(t("packages.install.title"))}</span>
+    <div class="env-restart-actions">
+      <button type="button" class="btn btn-sm btn-primary pkg-install-btn" data-repo="${escapeHtml(repoId)}">${escapeHtml(t("packages.install.action"))}</button>
+      <button type="button" class="btn btn-sm pkg-install-dismiss" data-repo="${escapeHtml(repoId)}">${escapeHtml(t("packages.install.dismiss"))}</button>
+    </div>
+  </div>`
+}
+
+function renderPackageVarGroup(entry) {
+  const key = entry.key
+  const variants = entry.variants || []
+  const multi = variants.length > 1
+  const dragHandle = `<span class="script-drag" title="${escapeHtml(t("scripts.drag"))}"><i class="mdi mdi-drag-vertical"></i></span>`
+
+  const variantsHtml = variants
+    .map((v, i) => {
+      const activeClass = v.active ? "active" : "dimmed"
+      const radio = multi
+        ? `<button type="button" class="env-variant-radio pkg-variant-radio ${v.active ? "is-active" : ""}" data-key="${escapeHtml(key)}" data-index="${i}" title="${escapeHtml(t("packages.selectVariant"))}"><i class="mdi ${v.active ? "mdi-radiobox-marked" : "mdi-radiobox-blank"}"></i></button>`
+        : ""
+      return `<div class="env-variant ${activeClass}" data-key="${escapeHtml(key)}" data-index="${i}">
+      ${radio}
+      <input type="text" class="env-value-input pkg-value-input" data-key="${escapeHtml(key)}" data-index="${i}" value="${escapeHtml(v.value)}" spellcheck="false" />
+    </div>`
+    })
+    .join("")
+
+  const addVariantBtn = `<button type="button" class="pkg-add-variant btn btn-sm" data-key="${escapeHtml(key)}"><i class="mdi mdi-plus"></i> ${escapeHtml(t("packages.addVariant"))}</button>`
+
+  if (multi) {
+    return `<div class="env-var-group pkg-var-group inspector-row" data-key="${escapeHtml(key)}" data-section="${escapeHtml(entry.section)}" data-drag-kind="package" draggable="true">
+      ${dragHandle}
+      <div class="env-var-group-body">
+        <div class="env-var-key">${escapeHtml(entry.name)}</div>
+        <div class="env-variants">${variantsHtml}</div>
+        ${addVariantBtn}
+      </div>
+    </div>`
+  }
+
+  return `<div class="env-var-group env-var-single pkg-var-group inspector-row" data-key="${escapeHtml(key)}" data-section="${escapeHtml(entry.section)}" data-drag-kind="package" draggable="true">
+    ${dragHandle}
+    <div class="env-var-group-body">
+      <label class="env-var-key-label">${escapeHtml(entry.name)}</label>
+      <input type="text" class="env-value-input env-single-value pkg-value-input" data-key="${escapeHtml(key)}" data-index="0" value="${escapeHtml(variants[0]?.value || "")}" spellcheck="false" />
+      ${addVariantBtn}
+    </div>
+  </div>`
+}
+
+function renderPackagesEditor(repoId, data) {
+  const entries = getOrderedPackageEntries(repoId, data.entries || [])
+  const deps = entries.filter((e) => e.section === "dependencies")
+  const devDeps = entries.filter((e) => e.section === "devDependencies")
+  const sections = [
+    { title: t("packages.dependencies"), items: deps },
+    { title: t("packages.devDependencies"), items: devDeps }
+  ].filter((section) => section.items.length)
+
+  const listHtml = sections.length
+    ? sections
+        .map(
+          (section) => `<div class="pkg-section">
+        <div class="pkg-section-title">${escapeHtml(section.title)}</div>
+        ${section.items.map((entry) => renderPackageVarGroup(entry)).join("")}
+      </div>`
+        )
+        .join("")
+    : `<p class="env-no-vars">${escapeHtml(t("packages.noPackages"))}</p>`
+
+  return `<div class="env-panel pkg-panel" data-repo-id="${escapeHtml(repoId)}">
+    ${renderPackagesInstallBanner(repoId)}
+    <div class="pkg-manager-hint">${escapeHtml(t("packages.manager", { manager: data.packageManager || "npm" }))}</div>
+    <div class="env-editor-list">${listHtml}</div>
+  </div>`
+}
+
+function renderPackagesPanel(repo) {
+  const cached = packagesDataCache.get(repo.id)
+  if (!cached) {
+    return `<div class="env-panel pkg-panel env-loading"><p>${escapeHtml(t("list.loading"))}</p></div>`
+  }
+  if (!cached.exists) {
+    return `<div class="env-panel pkg-panel env-empty-state"><p>${escapeHtml(t("packages.empty"))}</p></div>`
+  }
+  return renderPackagesEditor(repo.id, cached)
 }
 
 function renderDetailStatusBanner(repo) {
@@ -1297,15 +1470,14 @@ function renderDetailTabs(repo) {
 
   const tabsHtml = available
     .map((tab) => {
-      const icon = tab === "scripts" ? "mdi-play-circle-outline" : "mdi-code-braces"
-      const label = tab === "scripts" ? t("detail.tabs.scripts") : t("detail.tabs.env")
-      return `<button type="button" class="inspector-tab ${activeTab === tab ? "active" : ""}" data-tab="${tab}"><i class="mdi ${icon}"></i><span>${escapeHtml(label)}</span></button>`
+      const meta = detailTabMeta(tab)
+      return `<button type="button" class="inspector-tab ${activeTab === tab ? "active" : ""}" data-tab="${tab}"><i class="mdi ${meta.icon}"></i><span>${escapeHtml(meta.label)}</span></button>`
     })
     .join("")
 
   const panelsHtml = available
     .map((tab) => {
-      const content = tab === "scripts" ? renderScripts(repo) : renderEnvPanel(repo)
+      const content = renderDetailTabPanel(repo, tab)
       return `<div class="inspector-tab-panel ${activeTab === tab ? "" : "hidden"}" data-tab="${tab}">${content}</div>`
     })
     .join("")
@@ -1319,6 +1491,12 @@ async function loadEnvData(repoId) {
   return data
 }
 
+async function loadPackagesData(repoId) {
+  const data = await api(`/api/repos/${encodeURIComponent(repoId)}/packages`)
+  packagesDataCache.set(repoId, data)
+  return data
+}
+
 async function refreshEnvPanel(repoId) {
   if (selectedRepoId !== repoId) return
   const panel = detailContent.querySelector('.inspector-tab-panel[data-tab="env"]')
@@ -1326,6 +1504,65 @@ async function refreshEnvPanel(repoId) {
   const repo = repos.get(repoId)
   if (!repo) return
   panel.innerHTML = renderEnvPanel(repo)
+}
+
+async function refreshPackagesPanel(repoId) {
+  if (selectedRepoId !== repoId) return
+  const panel = detailContent.querySelector('.inspector-tab-panel[data-tab="packages"]')
+  if (!panel) return
+  const repo = repos.get(repoId)
+  if (!repo) return
+  panel.innerHTML = renderPackagesPanel(repo)
+}
+
+function markPackagesInstallPending(repoId) {
+  packagesInstallPending.add(repoId)
+}
+
+async function savePackageEntries(repoId, entries) {
+  const result = await api(`/api/repos/${encodeURIComponent(repoId)}/packages`, {
+    method: "PUT",
+    body: JSON.stringify({ entries })
+  })
+  packagesDataCache.set(repoId, result)
+  markPackagesInstallPending(repoId)
+  await refreshPackagesPanel(repoId)
+}
+
+async function switchPackageVariant(repoId, key, variantIndex) {
+  const result = await api(`/api/repos/${encodeURIComponent(repoId)}/packages/variant`, {
+    method: "POST",
+    body: JSON.stringify({ key, variantIndex })
+  })
+  packagesDataCache.set(repoId, result)
+  if (result.needsInstall) markPackagesInstallPending(repoId)
+  await refreshPackagesPanel(repoId)
+}
+
+async function addPackageVariant(repoId, key, value) {
+  const result = await api(`/api/repos/${encodeURIComponent(repoId)}/packages/variants`, {
+    method: "POST",
+    body: JSON.stringify({ key, value })
+  })
+  packagesDataCache.set(repoId, result)
+  await refreshPackagesPanel(repoId)
+}
+
+async function updatePackageVariantValue(repoId, key, variantIndex, value) {
+  const result = await api(`/api/repos/${encodeURIComponent(repoId)}/packages/value`, {
+    method: "POST",
+    body: JSON.stringify({ key, variantIndex, value })
+  })
+  packagesDataCache.set(repoId, result)
+  if (result.needsInstall) markPackagesInstallPending(repoId)
+  await refreshPackagesPanel(repoId)
+}
+
+async function runPackageInstall(repoId) {
+  await api(`/api/repos/${encodeURIComponent(repoId)}/install`, { method: "POST", body: "{}" })
+  packagesInstallPending.delete(repoId)
+  showToast(t("packages.install.started"))
+  await refreshPackagesPanel(repoId)
 }
 
 function markEnvChanged(repoId) {
@@ -1421,13 +1658,58 @@ function initDetailPanelEvents() {
     }
 
     const variantBtn = e.target.closest(".env-variant-radio")
-    if (variantBtn?.dataset.key != null && selectedRepoId) {
+    if (
+      variantBtn?.dataset.key != null &&
+      selectedRepoId &&
+      !variantBtn.classList.contains("pkg-variant-radio")
+    ) {
       const index = parseInt(variantBtn.dataset.index, 10)
       if (Number.isNaN(index)) return
       try {
         await switchEnvVariant(selectedRepoId, variantBtn.dataset.key, index)
       } catch (err) {
         alert(err.message || t("env.saveError"))
+      }
+      return
+    }
+
+    const pkgVariantBtn = e.target.closest(".pkg-variant-radio")
+    if (pkgVariantBtn?.dataset.key != null && selectedRepoId) {
+      const index = parseInt(pkgVariantBtn.dataset.index, 10)
+      if (Number.isNaN(index)) return
+      try {
+        await switchPackageVariant(selectedRepoId, pkgVariantBtn.dataset.key, index)
+      } catch (err) {
+        showToast(err.message || t("packages.saveError"), { type: "error" })
+      }
+      return
+    }
+
+    const pkgInstallBtn = e.target.closest(".pkg-install-btn")
+    if (pkgInstallBtn?.dataset.repo) {
+      try {
+        await runPackageInstall(pkgInstallBtn.dataset.repo)
+      } catch (err) {
+        showToast(err.message || t("packages.install.error"), { type: "error" })
+      }
+      return
+    }
+
+    const pkgDismissBtn = e.target.closest(".pkg-install-dismiss")
+    if (pkgDismissBtn?.dataset.repo) {
+      packagesInstallPending.delete(pkgDismissBtn.dataset.repo)
+      await refreshPackagesPanel(pkgDismissBtn.dataset.repo)
+      return
+    }
+
+    const pkgAddVariantBtn = e.target.closest(".pkg-add-variant")
+    if (pkgAddVariantBtn?.dataset.key && selectedRepoId) {
+      const value = prompt(t("packages.variantPrompt"))
+      if (value === null) return
+      try {
+        await addPackageVariant(selectedRepoId, pkgAddVariantBtn.dataset.key, value)
+      } catch (err) {
+        showToast(err.message || t("packages.saveError"), { type: "error" })
       }
       return
     }
@@ -1453,10 +1735,13 @@ function initDetailPanelEvents() {
     if (exampleBtn?.dataset.repo) {
       try {
         const includeCommented = envIncludeCommentedChecked()
-        const data = await api(`/api/repos/${encodeURIComponent(exampleBtn.dataset.repo)}/env/example`, {
-          method: "POST",
-          body: JSON.stringify({ includeCommented })
-        })
+        const data = await api(
+          `/api/repos/${encodeURIComponent(exampleBtn.dataset.repo)}/env/example`,
+          {
+            method: "POST",
+            body: JSON.stringify({ includeCommented })
+          }
+        )
         flashActionButton(exampleBtn)
         showToast(t("env.exampleSuccess", { path: ".env.example" }))
       } catch (err) {
@@ -1473,7 +1758,11 @@ function initDetailPanelEvents() {
     }
 
     const addVariantBtn = e.target.closest(".env-add-variant")
-    if (addVariantBtn?.dataset.key && selectedRepoId) {
+    if (
+      addVariantBtn?.dataset.key &&
+      selectedRepoId &&
+      !addVariantBtn.classList.contains("pkg-add-variant")
+    ) {
       const value = prompt(t("env.variantPrompt"))
       if (value === null) return
       try {
@@ -1508,7 +1797,25 @@ function initDetailPanelEvents() {
   detailContent.addEventListener(
     "focusout",
     async (e) => {
+      const pkgInput = e.target.closest(".pkg-value-input")
+      if (pkgInput && selectedRepoId) {
+        const key = pkgInput.dataset.key
+        const index = parseInt(pkgInput.dataset.index, 10)
+        if (!key || Number.isNaN(index)) return
+        const data = packagesDataCache.get(selectedRepoId)
+        if (!data) return
+        const entry = (data.entries || []).find((item) => item.key === key)
+        if (!entry || entry.variants[index]?.value === pkgInput.value) return
+        try {
+          await updatePackageVariantValue(selectedRepoId, key, index, pkgInput.value)
+        } catch (err) {
+          showToast(err.message || t("packages.saveError"), { type: "error" })
+        }
+        return
+      }
+
       const input = e.target.closest(".env-value-input")
+      if (input?.classList.contains("pkg-value-input")) return
       if (!input || !selectedRepoId) return
       const key = input.dataset.key
       const index = parseInt(input.dataset.index, 10)
@@ -1623,6 +1930,19 @@ function renderDetail() {
         const panel = detailContent.querySelector('.inspector-tab-panel[data-tab="env"]')
         if (panel && selectedRepoId === repo.id) {
           panel.innerHTML = `<div class="env-panel env-error"><p>${escapeHtml(err.message || t("env.saveError"))}</p></div>`
+        }
+      })
+  }
+
+  if (getActiveDetailTab(repo.id) === "packages" && repoHasPackages(repo)) {
+    loadPackagesData(repo.id)
+      .then(() => {
+        if (selectedRepoId === repo.id) refreshPackagesPanel(repo.id)
+      })
+      .catch((err) => {
+        const panel = detailContent.querySelector('.inspector-tab-panel[data-tab="packages"]')
+        if (panel && selectedRepoId === repo.id) {
+          panel.innerHTML = `<div class="env-panel pkg-panel env-error"><p>${escapeHtml(err.message || t("packages.saveError"))}</p></div>`
         }
       })
   }
@@ -2072,6 +2392,8 @@ async function loadRepos() {
   mergeReposFromApi(data)
   tags = data.tags || []
   scriptOrder = data.scriptOrder || {}
+  if (data.envOrder) envOrder = data.envOrder
+  if (data.packageOrder) packageOrder = data.packageOrder
   if (data.listView === "table" || data.listView === "cards") listView = data.listView
   listSort = data.listSort || "name"
   listFilters = data.listFilters || { running: false, dirty: false }
@@ -2481,7 +2803,9 @@ function onSessionEvent(data) {
     if (data.code === 0) {
       showToast(t("toast.scriptFinished", { name: label, project: projectName }))
     } else if (data.code === null) {
-      showToast(t("toast.scriptStopped", { name: label, project: projectName }), { type: "warning" })
+      showToast(t("toast.scriptStopped", { name: label, project: projectName }), {
+        type: "warning"
+      })
     } else {
       showToast(t("toast.scriptFailed", { name: label, project: projectName, code: data.code }), {
         type: "error"
@@ -2626,6 +2950,10 @@ async function restartScript(id, script) {
 
 let draggedScript = null
 let draggedScriptRepo = null
+let draggedInspectorKey = null
+let draggedInspectorRepo = null
+let draggedInspectorKind = null
+let draggedInspectorSection = null
 let scriptsDnDBound = false
 
 function initScriptsDnD() {
@@ -2633,6 +2961,19 @@ function initScriptsDnD() {
   scriptsDnDBound = true
 
   detailContent.addEventListener("dragstart", (e) => {
+    const inspectorRow = e.target.closest(".inspector-row[data-key]")
+    if (inspectorRow) {
+      const panel = inspectorRow.closest(".env-panel")
+      draggedInspectorKey = inspectorRow.dataset.key
+      draggedInspectorKind = inspectorRow.dataset.dragKind || null
+      draggedInspectorSection = inspectorRow.dataset.section || null
+      draggedInspectorRepo = panel?.dataset.repoId || selectedRepoId
+      inspectorRow.classList.add("dragging")
+      e.dataTransfer.effectAllowed = "move"
+      e.dataTransfer.setData("text/plain", draggedInspectorKey)
+      return
+    }
+
     const row = e.target.closest(".script-row[data-script]")
     if (!row) return
     const panel = row.closest(".scripts-panel")
@@ -2644,16 +2985,40 @@ function initScriptsDnD() {
   })
 
   detailContent.addEventListener("dragend", (e) => {
-    const row = e.target.closest(".script-row")
-    row?.classList.remove("dragging")
+    const scriptRow = e.target.closest(".script-row")
+    scriptRow?.classList.remove("dragging")
+    const inspectorRow = e.target.closest(".inspector-row")
+    inspectorRow?.classList.remove("dragging")
     detailContent
-      .querySelectorAll(".script-row.drag-over")
+      .querySelectorAll(".script-row.drag-over, .inspector-row.drag-over")
       .forEach((el) => el.classList.remove("drag-over"))
     draggedScript = null
     draggedScriptRepo = null
+    draggedInspectorKey = null
+    draggedInspectorRepo = null
+    draggedInspectorKind = null
+    draggedInspectorSection = null
   })
 
   detailContent.addEventListener("dragover", (e) => {
+    if (draggedInspectorKey) {
+      const row = e.target.closest(".inspector-row[data-key]")
+      if (!row || row.dataset.key === draggedInspectorKey) return
+      if (row.dataset.dragKind !== draggedInspectorKind) return
+      if (
+        draggedInspectorKind === "package" &&
+        row.dataset.section !== draggedInspectorSection
+      ) {
+        return
+      }
+      e.preventDefault()
+      detailContent.querySelectorAll(".inspector-row.drag-over").forEach((el) => {
+        if (el !== row) el.classList.remove("drag-over")
+      })
+      row.classList.add("drag-over")
+      return
+    }
+
     const row = e.target.closest(".script-row[data-script]")
     if (!row || !draggedScript || row.dataset.script === draggedScript) return
     e.preventDefault()
@@ -2664,11 +3029,104 @@ function initScriptsDnD() {
   })
 
   detailContent.addEventListener("dragleave", (e) => {
-    const row = e.target.closest(".script-row")
+    const row = e.target.closest(".script-row, .inspector-row")
     if (row && !row.contains(e.relatedTarget)) row.classList.remove("drag-over")
   })
 
   detailContent.addEventListener("drop", async (e) => {
+    if (draggedInspectorKey && draggedInspectorRepo) {
+      const row = e.target.closest(".inspector-row[data-key]")
+      if (!row) return
+      e.preventDefault()
+      row.classList.remove("drag-over")
+      const targetKey = row.dataset.key
+      if (!targetKey || targetKey === draggedInspectorKey) return
+      if (row.dataset.dragKind !== draggedInspectorKind) return
+      if (
+        draggedInspectorKind === "package" &&
+        row.dataset.section !== draggedInspectorSection
+      ) {
+        return
+      }
+
+      if (draggedInspectorKind === "env") {
+        const cached = envDataCache.get(draggedInspectorRepo)
+        const keys = getOrderedEnvVars(draggedInspectorRepo, cached?.entries).map((entry) => entry.key)
+        const from = keys.indexOf(draggedInspectorKey)
+        const to = keys.indexOf(targetKey)
+        if (from < 0 || to < 0) return
+        keys.splice(from, 1)
+        keys.splice(to, 0, draggedInspectorKey)
+        const previousOrder = envOrder[draggedInspectorRepo]
+          ? [...envOrder[draggedInspectorRepo]]
+          : null
+        setEnvOrderForRepo(draggedInspectorRepo, keys)
+        renderDetail()
+        try {
+          const data = await api(`/api/repos/${encodeURIComponent(draggedInspectorRepo)}/env-order`, {
+            method: "PUT",
+            body: JSON.stringify({ keys })
+          })
+          setEnvOrderForRepo(draggedInspectorRepo, data.envOrder || keys)
+          renderDetail()
+        } catch {
+          if (previousOrder) setEnvOrderForRepo(draggedInspectorRepo, previousOrder)
+          else {
+            const next = { ...envOrder }
+            delete next[draggedInspectorRepo]
+            envOrder = next
+          }
+          renderDetail()
+        }
+        return
+      }
+
+      if (draggedInspectorKind === "package") {
+        const cached = packagesDataCache.get(draggedInspectorRepo)
+        const section = draggedInspectorSection
+        const sectionEntries = getOrderedPackageEntries(draggedInspectorRepo, cached?.entries).filter(
+          (entry) => entry.section === section
+        )
+        const keys = sectionEntries.map((entry) => entry.key)
+        const from = keys.indexOf(draggedInspectorKey)
+        const to = keys.indexOf(targetKey)
+        if (from < 0 || to < 0) return
+        keys.splice(from, 1)
+        keys.splice(to, 0, draggedInspectorKey)
+        const previousOrder = packageOrder[draggedInspectorRepo]
+          ? {
+              dependencies: [...(packageOrder[draggedInspectorRepo].dependencies || [])],
+              devDependencies: [...(packageOrder[draggedInspectorRepo].devDependencies || [])]
+            }
+          : null
+        setPackageOrderForRepo(draggedInspectorRepo, section, keys)
+        renderDetail()
+        try {
+          const data = await api(
+            `/api/repos/${encodeURIComponent(draggedInspectorRepo)}/package-order`,
+            {
+              method: "PUT",
+              body: JSON.stringify(packageOrder[draggedInspectorRepo])
+            }
+          )
+          if (data.packageOrder) {
+            packageOrder = { ...packageOrder, [draggedInspectorRepo]: data.packageOrder }
+          }
+          renderDetail()
+        } catch {
+          if (previousOrder) {
+            packageOrder = { ...packageOrder, [draggedInspectorRepo]: previousOrder }
+          } else {
+            const next = { ...packageOrder }
+            delete next[draggedInspectorRepo]
+            packageOrder = next
+          }
+          renderDetail()
+        }
+      }
+      return
+    }
+
     const row = e.target.closest(".script-row[data-script]")
     if (!row || !draggedScript || !draggedScriptRepo) return
     e.preventDefault()
@@ -3227,7 +3685,10 @@ async function refreshCreateCategoryDir() {
   }
   try {
     const data = await api(`/api/category-dir?tag=${encodeURIComponent(tag)}`)
-    const hint = data.exists === false ? t("create.targetDirNew", { dir: data.dir }) : t("create.targetDir", { dir: data.dir })
+    const hint =
+      data.exists === false
+        ? t("create.targetDirNew", { dir: data.dir })
+        : t("create.targetDir", { dir: data.dir })
     createProjectDirHint.textContent = hint
   } catch {
     createProjectDirHint.textContent =
@@ -3548,6 +4009,7 @@ stopBtn.addEventListener("click", async () => {
 
 connectSSE()
 initSidebarDnD()
+initScriptsDnD()
 bindProjectListDnD()
 initTerminalResize()
 initDetailResize()
